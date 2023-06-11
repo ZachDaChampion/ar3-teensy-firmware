@@ -140,6 +140,50 @@ update_hw:
 }
 
 /**
+ * Run the stepper motors. This function should be called frequently.
+ */
+void run_steppers()
+{
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    switch (joint_states[i]->state) {
+      case JOINT_STATE_MOVE_AUTO:
+        steppers[i]->run();
+        break;
+      case JOINT_STATE_MOVE_SPEED:
+        steppers[i]->runSpeed();
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/**
+ * Send a message to the serial port. This function adds the '$', the checksum, and the newline.
+ *
+ * \param[in] from Buffer to send.
+ */
+void send_msg(char* from)
+{
+  Serial.print("$");
+  Serial.print(from);
+  Serial.print("\n");
+}
+
+/**
+ * Write an error message to a buffer.
+ *
+ * \param[out] dest The buffer to write to
+ * \param[in] size The size of the buffer
+ * \param[in] code The error code
+ * \param[in] msg The error message
+ */
+int write_err(char* dest, size_t size, uint8_t code, const char* msg)
+{
+  return snprintf(obuf, size, "ERR;%d;%s;", code, msg);
+}
+
+/**
  * Parse an input from the serial port.
  *
  * \param[out] dest Destination to write the response to
@@ -201,48 +245,4 @@ bool verify_checksum(char* msg, char* checksum)
 {
   // TODO
   return true;
-}
-
-/**
- * Send a message to the serial port. This function adds the '$', the checksum, and the newline.
- *
- * \param[in] from Buffer to send.
- */
-void send_msg(char* from)
-{
-  Serial.print("$");
-  Serial.print(from);
-  Serial.print("\n");
-}
-
-/**
- * Write an error message to a buffer.
- *
- * \param[out] dest The buffer to write to
- * \param[in] size The size of the buffer
- * \param[in] code The error code
- * \param[in] msg The error message
- */
-int write_err(char* dest, size_t size, uint8_t code, const char* msg)
-{
-  return snprintf(obuf, size, "ERR;%d;%s;", code, msg);
-}
-
-/**
- * Run the stepper motors. This function should be called frequently.
- */
-void run_steppers()
-{
-  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
-    switch (joint_states[i]->state) {
-      case JOINT_STATE_MOVE_AUTO:
-        steppers[i]->run();
-        break;
-      case JOINT_STATE_MOVE_SPEED:
-        steppers[i]->runSpeed();
-        break;
-      default:
-        break;
-    }
-  }
 }
