@@ -2,7 +2,7 @@
  * \file LimitSwitch.cpp
  * \author Zach Champion (zachchampion79@gmail.com)
  *
- * \version 0.1
+ * \version 1.0
  * \date 2023-06-10
  *
  * @copyright Copyright (c) 2023
