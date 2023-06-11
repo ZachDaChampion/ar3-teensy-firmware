@@ -25,8 +25,11 @@ uint8_t LimitSwitch::read()
 {
   uint32_t now = millis();
   if (now - this->last_update_time_ > this->debounce_time_) {
-    this->state_ = digitalRead(this->pin_);
-    this->last_update_time_ = now;
+    uint8_t new_state = digitalRead(this->pin_);
+    if (new_state != this->state_) {
+      this->state_ = new_state;
+      this->last_update_time_ = now;
+    }
   }
   return this->state_;
 }
