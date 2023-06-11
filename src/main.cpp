@@ -295,8 +295,6 @@ void parse_serial(char* dest, size_t size, char* from)
   else if (strcmp(cmd, "MV") == 0)
     cmd_mv(dest, size, args);
   else if (strcmp(cmd, "MVR") == 0)
-    cmd_mvr(dest, size, args);
-  else if (strcmp(cmd, "STP") == 0)
     cmd_stp(dest, size, args);
   else if (strcmp(cmd, "GET") == 0)
     cmd_get(dest, size, args);
@@ -444,7 +442,7 @@ void cmd_cal(char* dest, size_t size, char* args)
 }
 
 /**
- * Handle the SET command. Set the position of a joint.
+ * Handle the SET command. Set the current position of one or more joints.
  *
  * \param[out] dest Output buffer to write to
  * \param[in] size Size of the output buffer
@@ -520,4 +518,152 @@ void cmd_set(char* dest, size_t size, char* args)
  * \param[in] size Size of the output buffer
  * \param[in] args  Command arguments
  */
-void cmd_mv(char* dest, size_t size, char* args) {}
+void cmd_mv(char* dest, size_t size, char* args)
+{
+  if (!robot_state.firmware_matched) {
+    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    return;
+  }
+  if (!robot_state.calibrated) {
+    write_err(dest, size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    return;
+  }
+
+  uint16_t joints_to_move = 0;  // bitfield of joints to move
+
+  // Parse arguments and move joints
+  for (uint8_t i = 0; args != NULL; ++i) {
+    ParsedArg arg = parse_arg(args, joints[i].name);
+
+    // Find the joint with the given label
+    uint8_t joint_idx;
+    for (joint_idx = 0; joint_idx < JOINT_COUNT; ++joint_idx) {
+      if (strcmp(arg.label, joints[joint_idx].name) == 0) break;
+    }
+    if (joint_idx == JOINT_COUNT) {
+      stop_all();
+      char msg[32];
+      snprintf(msg, SIZE(msg), "Invalid joint '%s'", arg.label);
+      write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
+      return;
+    }
+
+    // Check that the number of arguments is correct
+    if (arg.count < 1 || arg.count > 2) {
+      stop_all();
+      char msg[64];
+      snprintf(msg, SIZE(msg), "Invalid number of arguments for joint '%s'", arg.label);
+      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+      return;
+    }
+
+    // Parse new target position
+    char* endptr;
+    long new_target = strtol(arg.vals[0], &endptr, 10);
+    if (*endptr != '\0') {
+      stop_all();
+      char msg[128];
+      snprintf(msg, SIZE(msg), "Invalid destination '%s' for joint '%s'", arg.vals[0], arg.label);
+      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+      return;
+    }
+    if (new_target < joints[i].min_steps || new_target > joints[i].max_steps) {
+      stop_all();
+      char msg[128];
+      snprintf(msg, SIZE(msg), "Destination '%s' for joint '%s' is out of range", arg.vals[0],
+               arg.label);
+      write_err(dest, size, AR3_ERR_OOB, msg);
+      return;
+    }
+
+    // Parse speed if given
+    float move_speed = 0;
+    if (arg.count == 2) {
+      move_speed = strtof(arg.vals[1], &endptr);
+      if (*endptr != '\0') {
+        stop_all();
+        char msg[128];
+        snprintf(msg, SIZE(msg), "Invalid speed '%s' for joint '%s'", arg.vals[1], arg.label);
+        write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+        return;
+      }
+      if (move_speed < -joints[i].max_speed || move_speed > joints[i].max_speed) {
+        stop_all();
+        char msg[128];
+        snprintf(msg, SIZE(msg), "Speed '%s' for joint '%s' is out of range", arg.vals[1],
+                 arg.label);
+        write_err(dest, size, AR3_ERR_OOB, msg);
+        return;
+      }
+    }
+
+    // Set the new target position
+    steppers[joint_idx]->moveTo(new_target);
+    if (move_speed == 0) {
+      joint_states[joint_idx] = JOINT_STATE_MOVE_AUTO;
+    } else {
+      steppers[joint_idx]->setSpeed(move_speed);
+      joint_states[joint_idx] = JOINT_STATE_MOVE_TO_SPEED;
+    }
+    joints_to_move |= (1 << joint_idx);
+  }
+
+  // Wait for all joints to finish moving
+  while (joints_to_move != 0) {
+    for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+      if (joints_to_move & (1 << i) && !steppers[i]->isRunning()) {
+        joints_to_move &= ~(1 << i);
+        joint_states[i] = JOINT_STATE_HOLD;
+      }
+    }
+  }
+
+  snprintf(dest, size, "OK;");
+}
+
+/**
+ * Handle the STP command. Stops all joints.
+ *
+ * \param[out] dest Output buffer to write to
+ * \param[in] size Size of the output buffer
+ * \param[in] args  Command arguments
+ */
+void cmd_stp(char* dest, size_t size, char* args)
+{
+  if (!robot_state.firmware_matched) {
+    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    return;
+  }
+
+  uint8_t immediate = 0;
+  if (args != NULL) {
+    ParsedArg arg = parse_arg(args, "i");
+    if (strcmp(arg.label, "i") != 0) {
+      stop_all();
+      char msg[64];
+      snprintf(msg, SIZE(msg), "Invalid argument '%s'", arg.label);
+      write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
+      return;
+    }
+    if (arg.count != 1) {
+      stop_all();
+      char msg[64];
+      snprintf(msg, SIZE(msg), "Invalid number of arguments for 'i'");
+      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+      return;
+    }
+
+    if (strcmp(arg.vals[0], "1") == 0) {
+      immediate = 1;
+    } else if (strcmp(arg.vals[0], "0") != 0) {
+      stop_all();
+      char msg[64];
+      snprintf(msg, SIZE(msg), "Invalid value '%s' for 'i'", arg.vals[0]);
+      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+      return;
+    }
+  }
+
+  stop_all(immediate == 1);
+  snprintf(dest, size, "OK;");
+}

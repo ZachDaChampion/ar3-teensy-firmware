@@ -28,11 +28,11 @@ All whitespace characters (spaces, tabs, newlines, etc.) are ignored.
 Examples:
 
 ```text
-$MV;90;*XX           # Move joint 1 to 90 degrees
-$MV;90;45;*XX        # Move joint 1 to 90 degrees and join 2 to 45 degrees
-$MV;j2:45;*XX        # Move joint 2 to 45 degrees
-$MV;90,5;*XX         # Move joint 1 to 90 degrees at 5 degrees per second
-$MV; j2:45,5; *XX    # Move joint 2 to 45 degrees at 5 degrees per second
+$MV;90;*XX           # Move joint 1 to 90 steps
+$MV;90;45;*XX        # Move joint 1 to 90 steps and join 2 to 45 steps
+$MV;j2:45;*XX        # Move joint 2 to 45 steps
+$MV;90,5;*XX         # Move joint 1 to 90 steps at 5 steps per second
+$MV; j2:45,5; *XX    # Move joint 2 to 45 steps at 5 steps per second
 ```
 
 Responses follow a similar format:
@@ -127,7 +127,7 @@ None
 
 ### `MV` - Move Joint to Position
 
-Move one or more joints to a given position (in degrees). This command moves the joints to the
+Move one or more joints to a given position (in steps). This command moves the joints to the
 specified position at a desired speed. If no speed is specified, the default acceleration and
 maximum speed are used.
 
@@ -157,45 +157,15 @@ None
 <-  $ER;3;Joint 3 speed out of bounds;*XX
 ```
 
-### `MVR` - Move Joint Relative to Current Position
-
-Move one or more joints to a given position (in degrees) relative to their current position. This
-command moves the joints to the specified position at a desired speed. If no speed is specified, the
-default acceleration and maximum speed are used.
-
-#### Arguments
-
-| Label | Description                                     | Format     |
-| ----- | ----------------------------------------------- | ---------- |
-| `j_`  | target positions (steps), optional speeds (deg) | int, float |
-
-#### Results
-
-None
-
-#### Examples
-
-```text
-->  $MVR;90;*XX
-<-  $OK;*XX
-
-->  $MVR;90,5;*XX
-<-  $OK;*XX
-
-->  $MVR;j2:90;j3:45,5;*XX
-<-  $OK;*XX
-
-->  $MVR;j1:90;j2:90,5;j3:999,5;*XX
-<-  $ER;3;Joint 3 speed out of bounds;*XX
-```
-
 ### `STP` - Stop
 
 Stop all movement.
 
 #### Arguments
 
-None
+| Label | Description                                                 | Format |
+| ----- | ----------------------------------------------------------- | ------ |
+| `i`   | `1` to stop immediately, `0` to stop smoothly (default `0`) | int    |
 
 #### Results
 
@@ -206,6 +176,12 @@ None
 ```text
 ->  $STP;*XX
 <-  $OK;*XX
+
+->  $STP;1;*XX
+<-  $OK;*XX
+
+->  $STP;2;*XX
+<-  $ER;2;Argument '2' for 'i' is invalid;*XX
 ```
 
 ### `GET` - Get Current Joint Position
