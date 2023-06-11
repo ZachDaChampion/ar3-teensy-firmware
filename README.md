@@ -9,7 +9,7 @@ consist of a single line of text, terminated by a newline character (`\n`). Each
 format:
 
 ```text
-$<command>;[<arg1>;[<arg2>;...]]<checksum>
+$<command>;[<arg1>;[<arg2>;...]]*<checksum>
 ```
 
 The `$` character indicates the start of a message. The `<command>` is a string of characters
@@ -28,11 +28,11 @@ All whitespace characters (spaces, tabs, newlines, etc.) are ignored.
 Examples:
 
 ```text
-$MV;90;XX           # Move joint 1 to 90 degrees
-$MV;90;45;XX        # Move joint 1 to 90 degrees and join 2 to 45 degrees
-$MV;j2:45;XX        # Move joint 2 to 45 degrees
-#MV;90,5;XX         # Move joint 1 to 90 degrees at 5 degrees per second
-#MV; j2:45,5; XX    # Move joint 2 to 45 degrees at 5 degrees per second
+$MV;90;*XX           # Move joint 1 to 90 degrees
+$MV;90;45;*XX        # Move joint 1 to 90 degrees and join 2 to 45 degrees
+$MV;j2:45;*XX        # Move joint 2 to 45 degrees
+#MV;90,5;*XX         # Move joint 1 to 90 degrees at 5 degrees per second
+#MV; j2:45,5; *XX    # Move joint 2 to 45 degrees at 5 degrees per second
 ```
 
 Responses follow a similar format:
@@ -70,11 +70,11 @@ None
 #### Examples
 
 ```text
-->  $INIT;1.0.0;XX
-<-  $OK;XX
+->  $INIT;1.0.0;*XX
+<-  $OK;*XX
 
-->  $INIT;1.0.1;XX
-<-  $ERR;2;AR3 is running firmware version 1.0.0, but 1.0.1 is required;XX
+->  $INIT;1.0.1;*XX
+<-  $ERR;2;AR3 is running firmware version 1.0.0, but 1.0.1 is required;*XX
 ```
 
 ### `CAL` - Calibrate
@@ -93,11 +93,11 @@ None
 #### Examples
 
 ```text
-->  $CAL;XX
-<-  $OK;XX
+->  $CAL;*XX
+<-  $OK;*XX
 
-->  $CAL;XX
-<-  $ER;6;Joint 4 failed to hit limit;XX
+->  $CAL;*XX
+<-  $ER;6;Joint 4 failed to hit limit;*XX
 ```
 
 ### `SET` - Set Current Joint Position
@@ -118,14 +118,14 @@ None
 #### Examples
 
 ```text
--> $SET;100,200,300;XX
-<- $OK;XX
+-> $SET;100,200,300;*XX
+<- $OK;*XX
 
-->  $SET;j2:200;j3:300;XX
-<-  $OK;XX
+->  $SET;j2:200;j3:300;*XX
+<-  $OK;*XX
 
-->  $SET;j1:999;j2:200;j3:300;XX
-<-  $ER;3,Joint 1 position out of bounds;XX
+->  $SET;j1:999;j2:200;j3:300;*XX
+<-  $ER;3,Joint 1 position out of bounds;*XX
 ```
 
 ### `MV` - Move Joint to Position
@@ -147,17 +147,17 @@ None
 #### Examples
 
 ```text
-->  $MV;90;XX
-<-  $OK;XX
+->  $MV;90;*XX
+<-  $OK;*XX
 
-->  $MV;90,5;XX
-<-  $OK;XX
+->  $MV;90,5;*XX
+<-  $OK;*XX
 
-->  $MV;j2:90;j3:45,5;XX
-<-  $OK;XX
+->  $MV;j2:90;j3:45,5;*XX
+<-  $OK;*XX
 
-->  $MV;j1:90;j2:90,5;j3:999,5;XX
-<-  $ER;3;Joint 3 speed out of bounds;XX
+->  $MV;j1:90;j2:90,5;j3:999,5;*XX
+<-  $ER;3;Joint 3 speed out of bounds;*XX
 ```
 
 ### `MVR` - Move Joint Relative to Current Position
@@ -179,17 +179,17 @@ None
 #### Examples
 
 ```text
-->  $MVR;90;XX
-<-  $OK;XX
+->  $MVR;90;*XX
+<-  $OK;*XX
 
-->  $MVR;90,5;XX
-<-  $OK;XX
+->  $MVR;90,5;*XX
+<-  $OK;*XX
 
-->  $MVR;j2:90;j3:45,5;XX
-<-  $OK;XX
+->  $MVR;j2:90;j3:45,5;*XX
+<-  $OK;*XX
 
-->  $MVR;j1:90;j2:90,5;j3:999,5;XX
-<-  $ER;3;Joint 3 speed out of bounds;XX
+->  $MVR;j1:90;j2:90,5;j3:999,5;*XX
+<-  $ER;3;Joint 3 speed out of bounds;*XX
 ```
 
 ### `STP` - Stop
@@ -207,8 +207,8 @@ None
 #### Examples
 
 ```text
-->  $STP;XX
-<-  $OK;XX
+->  $STP;*XX
+<-  $OK;*XX
 ```
 
 ### `GET` - Get Current Joint Position
@@ -230,11 +230,11 @@ Get the current position of one or more joints (in steps).
 #### Examples
 
 ```text
-->  $GET;XX
-<-  $OK;j1:100;j2:200;j3:300;XX
+->  $GET;*XX
+<-  $OK;j1:100;j2:200;j3:300;*XX
 
-->  $GET;j1;j2;XX
-<-  $OK;j1:100;j2:200;XX
+->  $GET;j1;j2;*XX
+<-  $OK;j1:100;j2:200;*XX
 ```
 
 ### `RST` - Reset
@@ -252,8 +252,8 @@ None
 #### Examples
 
 ```text
-->  $RST;XX
-<-  $OK;XX
+->  $RST;*XX
+<-  $OK;*XX
 ```
 
 ### `HOME` - Move to Home Position
@@ -271,8 +271,8 @@ None
 #### Examples
 
 ```text
-->  $HOME;XX
-<-  $OK;XX
+->  $HOME;*XX
+<-  $OK;*XX
 ```
 
 ## Checksum Calculation

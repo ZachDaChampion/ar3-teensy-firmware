@@ -80,6 +80,10 @@ static char obuf[1024];
 
 void setup()
 {
+  // Ensure i/o buffers are null-terminated (for safety)
+  ibuf[SIZE(ibuf) - 1] = '\0';
+  obuf[SIZE(obuf) - 1] = '\0';
+
   // Initialize steppers, encoders, and limit switches
   for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
     steppers[i] = new AccelStepper(AccelStepper::DRIVER, joints[i].step_pin, joints[i].dir_pin);
@@ -104,7 +108,7 @@ void loop()
     // If the character is a newline, then we have received a complete command
     if (c == '\n') {
       ibuf[ibuf_idx] = '\0';
-      parse_serial(obuf, SIZE(obuf), ibuf, ibuf_idx);
+      parse_serial(obuf, SIZE(obuf), ibuf);
       send_msg(obuf);
       ibuf_idx = 0;
       goto update_hw;
@@ -141,11 +145,62 @@ update_hw:
  * \param[out] dest Destination to write the response to
  * \param[in] size Size of the destination buffer
  * \param[in] from Input buffer to parse
- * \param[in] len Length of the input buffer
  */
-void parse_serial(char* dest, size_t size, char* from, size_t len)
+void parse_serial(char* dest, size_t size, char* from)
+{
+  // Check if beginning of message is valid
+  if (from[0] != '$') {
+    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Command must start with '$'");
+    return;
+  }
+
+  // Separate message and checksum
+  char* msg = strtok(from, "*");
+  char* checksum = strtok(NULL, "*");
+  if (msg == NULL || checksum == NULL) {
+    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
+    return;
+  }
+  if (!verify_checksum(msg, checksum)) {
+    write_err(dest, size, AR3_ERR_INVALID_CHECKSUM, "Invalid checksum");
+    return;
+  }
+
+  // Parse the command
+  char* cmd = strtok(msg, ";");
+  if (cmd == NULL) {
+    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
+    return;
+  }
+  char* args = strtok(NULL, ";");
+
+  // Run the command
+  if (strcmp(cmd, "INIT") == 0)
+    cmd_init(dest, size, args);
+  else if (strcmp(cmd, "CAL") == 0)
+    cmd_cal(dest, size, args);
+  else if (strcmp(cmd, "SET") == 0)
+    cmd_set(dest, size, args);
+  else if (strcmp(cmd, "MV") == 0)
+    cmd_mv(dest, size, args);
+  else if (strcmp(cmd, "MVR") == 0)
+    cmd_mvr(dest, size, args);
+  else if (strcmp(cmd, "STP") == 0)
+    cmd_stp(dest, size, args);
+  else if (strcmp(cmd, "GET") == 0)
+    cmd_get(dest, size, args);
+  else if (strcmp(cmd, "RST") == 0)
+    cmd_rst(dest, size, args);
+  else if (strcmp(cmd, "HOME") == 0)
+    cmd_home(dest, size, args);
+  else
+    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
+}
+
+bool verify_checksum(char* msg, char* checksum)
 {
   // TODO
+  return true;
 }
 
 /**
