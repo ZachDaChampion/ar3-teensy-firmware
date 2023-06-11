@@ -74,7 +74,7 @@ None
 <-  $OK;*XX
 
 ->  $INIT;1.0.1;*XX
-<-  $ERR;2;AR3 is running firmware version 1.0.0, but 1.0.1 is required;*XX
+<-  $ERR;2;Running firmware 1.0.0, expected 1.0.1;*XX
 ```
 
 ### `CAL` - Calibrate
@@ -95,9 +95,6 @@ None
 ```text
 ->  $CAL;*XX
 <-  $OK;*XX
-
-->  $CAL;*XX
-<-  $ER;6;Joint 4 failed to hit limit;*XX
 ```
 
 ### `SET` - Set Current Joint Position
@@ -125,7 +122,7 @@ None
 <-  $OK;*XX
 
 ->  $SET;j1:999;j2:200;j3:300;*XX
-<-  $ER;3,Joint 1 position out of bounds;*XX
+<-  $ER;3,Argument '999' for joint j1' is out of range;*XX
 ```
 
 ### `MV` - Move Joint to Position

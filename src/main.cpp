@@ -288,14 +288,14 @@ struct ParsedArg {
  * \param[in] default_label The default label to use if none is specified
  * \return The parsed argument
  */
-ParsedArg parse_arg(char* arg, char* default_label)
+ParsedArg parse_arg(char* arg, const char* default_label)
 {
   // Parse label
   ParsedArg ret;
   char* save_ptr;
   char* delim = strchr(arg, ':');
   if (delim == NULL) {
-    ret.label = default_label;
+    ret.label = (char*)default_label;
     delim = arg;
   } else {
     *delim = '\0';
@@ -343,7 +343,6 @@ void cmd_init(char* dest, size_t size, char* args)
     return;
   }
 
-  // Initialize the robot
   robot_state.firmware_matched = true;
   snprintf(dest, size, "OK;");
 }
@@ -357,6 +356,10 @@ void cmd_init(char* dest, size_t size, char* args)
  */
 void cmd_cal(char* dest, size_t size, char* args)
 {
+  if (!robot_state.firmware_matched) {
+    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    return;
+  }
   if (args != NULL) {
     write_err(dest, size, AR3_ERR_INVALID_ARG, "CAL does not take arguments");
     return;
@@ -404,5 +407,71 @@ void cmd_cal(char* dest, size_t size, char* args)
   }
 
   robot_state.calibrated = true;
+  snprintf(dest, size, "OK;");
+}
+
+/**
+ * Handle the SET command. Set the position of a joint.
+ *
+ * \param[out] dest Output buffer to write to
+ * \param[in] size Size of the output buffer
+ * \param[in] args  Command arguments
+ */
+void cmd_set(char* dest, size_t size, char* args)
+{
+  if (!robot_state.firmware_matched) {
+    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    return;
+  }
+  if (!robot_state.calibrated) {
+    write_err(dest, size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    return;
+  }
+
+  // Parse arguments and set joint positions
+  for (uint8_t i = 0; args != NULL; ++i) {
+    ParsedArg arg = parse_arg(args, joints[i].name);
+
+    // Find the joint with the given label
+    uint8_t joint_idx;
+    for (joint_idx = 0; joint_idx < JOINT_COUNT; ++joint_idx) {
+      if (strcmp(arg.label, joints[joint_idx].name) == 0) break;
+    }
+    if (joint_idx == JOINT_COUNT) {
+      char msg[32];
+      snprintf(msg, SIZE(msg), "Invalid joint '%s'", arg.label);
+      write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
+      return;
+    }
+
+    // Check that the number of arguments is correct
+    if (arg.count != 1) {
+      char msg[64];
+      snprintf(msg, SIZE(msg), "Invalid number of arguments for joint '%s'", arg.label);
+      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+      return;
+    }
+
+    // Check that the argument is a valid number
+    char* endptr;
+    long new_steps = strtol(arg.vals[0], &endptr, 10);
+    if (*endptr != '\0') {
+      char msg[128];
+      snprintf(msg, SIZE(msg), "Invalid argument '%s' for joint '%s'", arg.vals[0], arg.label);
+      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
+      return;
+    }
+    if (new_steps < joints[i].min_steps || new_steps > joints[i].max_steps) {
+      char msg[128];
+      snprintf(msg, SIZE(msg), "Argument '%s' for joint '%s' is out of range", arg.vals[0],
+               arg.label);
+      write_err(dest, size, AR3_ERR_OOB, msg);
+      return;
+    }
+
+    // Set the new position
+    steppers[joint_idx]->setCurrentPosition(new_steps);
+  }
+
   snprintf(dest, size, "OK;");
 }
