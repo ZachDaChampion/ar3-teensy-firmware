@@ -1,3 +1,14 @@
+/**
+ * \file LimitSwitch.hpp
+ * \author Zach Champion (zachchampion79@gmail.com)
+ * 
+ * \version 0.1
+ * \date 2023-06-10
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+
 #ifndef AR3_TEENSY_FIRMWARE__LIMIT_SWITCH_HPP
 #define AR3_TEENSY_FIRMWARE__LIMIT_SWITCH_HPP
 

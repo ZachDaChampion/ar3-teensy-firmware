@@ -4,6 +4,7 @@
 
 #include <LimitSwitch.hpp>
 #include <ar3_error.h>
+#include <checksum.hpp>
 
 #define SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define JOINT_COUNT SIZE(joints)
@@ -239,10 +240,4 @@ void parse_serial(char* dest, size_t size, char* from)
     cmd_home(dest, size, args);
   else
     write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
-}
-
-bool verify_checksum(char* msg, char* checksum)
-{
-  // TODO
-  return true;
 }
