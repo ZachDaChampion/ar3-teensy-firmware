@@ -15,8 +15,8 @@ $<command>;[<arg1>;[<arg2>;...]]*<checksum>
 The `$` character indicates the start of a message. The `<command>` is a string of characters
 indicating the command to execute. The `<arg>`s are optional arguments to the command. At the end of
 the message is a two-digit hexadecimal checksum, which is calculated on all the bytes after the `$`
-and before the checksum. In place of a checksum, you may also send `XX` to indicate that the
-checksum should be ignored. For more information, see the [Checksum](#checksum) section.
+and before the `*`. In place of a checksum, you may also send `XX` to indicate that the checksum
+should be ignored. For more information, see the [Checksum](#checksum) section.
 
 Arguments are separated by semicolons (`;`). The number and type of arguments depends on the
 command. Some arguments are optional. Every argument has a label, which can be used to identify it:
@@ -31,14 +31,14 @@ Examples:
 $MV;90;*XX           # Move joint 1 to 90 degrees
 $MV;90;45;*XX        # Move joint 1 to 90 degrees and join 2 to 45 degrees
 $MV;j2:45;*XX        # Move joint 2 to 45 degrees
-#MV;90,5;*XX         # Move joint 1 to 90 degrees at 5 degrees per second
-#MV; j2:45,5; *XX    # Move joint 2 to 45 degrees at 5 degrees per second
+$MV;90,5;*XX         # Move joint 1 to 90 degrees at 5 degrees per second
+$MV; j2:45,5; *XX    # Move joint 2 to 45 degrees at 5 degrees per second
 ```
 
 Responses follow a similar format:
 
 ```text
-$<ack>;[<res1>;[<res2>;...]]<checksum>
+$<ack>;[<res1>;[<res2>;...]]*<checksum>
 ```
 
 The `<ack>` is either `OK` or `ERR`. An `OK` response indicates that the command was executed

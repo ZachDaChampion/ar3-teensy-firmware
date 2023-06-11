@@ -160,15 +160,15 @@ void run_steppers()
 }
 
 /**
- * Send a message to the serial port. This function adds the '$', the checksum, and the newline.
+ * Send a message to the serial port. This function adds the '$', the '*', the checksum, and the
+ * newline.
  *
  * \param[in] from Buffer to send.
  */
 void send_msg(char* from)
 {
-  Serial.print("$");
-  Serial.print(from);
-  Serial.print("\n");
+  uint8_t checksum = calc_checksum(from);
+  Serial.printf("$%s*%02X\n", from, checksum);
 }
 
 /**
