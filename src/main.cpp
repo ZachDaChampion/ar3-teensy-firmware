@@ -39,6 +39,7 @@ struct JointConfig {
 enum JointState {
   JOINT_STATE_OFF,            // Joint is off
   JOINT_STATE_HOLD,           // Joint is holding position
+  JOINT_STATE_STOPPING,       // Joint is in the process of stopping
   JOINT_STATE_MOVE_SPEED,     // Joint is moving at a constant speed
   JOINT_STATE_MOVE_TO_SPEED,  // Joint is moving to a position at a constant speed
   JOINT_STATE_MOVE_AUTO,      // Joint is moving to a position at an automatically calculated speed
@@ -152,17 +153,49 @@ void run_steppers()
 {
   for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
     switch (joint_states[i]) {
+      case JOINT_STATE_STOPPING:
+        if (steppers[i]->isRunning()) {
+          steppers[i]->run();
+        } else {
+          joint_states[i] = JOINT_STATE_HOLD;
+        }
+        break;
+
       case JOINT_STATE_MOVE_AUTO:
         steppers[i]->run();
         break;
+
       case JOINT_STATE_MOVE_SPEED:
         steppers[i]->runSpeed();
         break;
+
       case JOINT_STATE_MOVE_TO_SPEED:
         steppers[i]->runSpeedToPosition();
         break;
+
       default:
         break;
+    }
+  }
+}
+
+/**
+ * Stop all stepper motors. Bt default, this function takes into account maximum acceleration and
+ * deceleration values, so the motors may not stop immediately. Set the `immediate` parameter to
+ * `true` to stop the motors immediately.
+ *
+ * \param[in] immediate Whether to stop the motors immediately or not.
+ */
+void stop_all(bool immediate = false)
+{
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    if (immediate) {
+      steppers[i]->setSpeed(0);
+      steppers[i]->runSpeed();
+      joint_states[i] = JOINT_STATE_HOLD;
+    } else {
+      steppers[i]->stop();
+      joint_states[i] = JOINT_STATE_STOPPING;
     }
   }
 }
@@ -438,6 +471,7 @@ void cmd_set(char* dest, size_t size, char* args)
       if (strcmp(arg.label, joints[joint_idx].name) == 0) break;
     }
     if (joint_idx == JOINT_COUNT) {
+      stop_all();
       char msg[32];
       snprintf(msg, SIZE(msg), "Invalid joint '%s'", arg.label);
       write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
@@ -446,6 +480,7 @@ void cmd_set(char* dest, size_t size, char* args)
 
     // Check that the number of arguments is correct
     if (arg.count != 1) {
+      stop_all();
       char msg[64];
       snprintf(msg, SIZE(msg), "Invalid number of arguments for joint '%s'", arg.label);
       write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
@@ -456,12 +491,14 @@ void cmd_set(char* dest, size_t size, char* args)
     char* endptr;
     long new_steps = strtol(arg.vals[0], &endptr, 10);
     if (*endptr != '\0') {
+      stop_all();
       char msg[128];
       snprintf(msg, SIZE(msg), "Invalid argument '%s' for joint '%s'", arg.vals[0], arg.label);
       write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
       return;
     }
     if (new_steps < joints[i].min_steps || new_steps > joints[i].max_steps) {
+      stop_all();
       char msg[128];
       snprintf(msg, SIZE(msg), "Argument '%s' for joint '%s' is out of range", arg.vals[0],
                arg.label);
@@ -475,3 +512,12 @@ void cmd_set(char* dest, size_t size, char* args)
 
   snprintf(dest, size, "OK;");
 }
+
+/**
+ * Handle the MV command. Move one or more joints to a position.
+ *
+ * \param[out] dest Output buffer to write to
+ * \param[in] size Size of the output buffer
+ * \param[in] args  Command arguments
+ */
+void cmd_mv(char* dest, size_t size, char* args) {}
