@@ -26,8 +26,9 @@
 
 // Message lengths (in bytes) indexed by message type. -1 indicates a variable length message.
 static const size_t MSG_LEN[] = {
-  [MSG_ERR] = -1, [MSG_ACK] = 3,  [MSG_DONE] = 3, [MSG_INIT] = 5, [MSG_CAL] = 3, [MSG_SET] = 17,
-  [MSG_GET] = 3,  [MSG_MOV] = 45, [MSG_STP] = 4,  [MSG_RST] = 3,  [MSG_HOM] = 3, [MSG_POS] = 17,
+  [MSG_ERR] = (size_t)-1, [MSG_ACK] = 3,  [MSG_DONE] = 3, [MSG_INIT] = 5,
+  [MSG_CAL] = 3,          [MSG_SET] = 17, [MSG_GET] = 3,  [MSG_MOV] = 45,
+  [MSG_STP] = 4,          [MSG_RST] = 3,  [MSG_HOM] = 3,  [MSG_POS] = 17,
 };
 
 struct JointConfig {
@@ -121,6 +122,22 @@ static uint8_t ibuf_idx = 0;
 // Serial buffer used for sending responses
 static uint8_t obuf[1024];
 
+// Forward declarations
+void run_steppers();
+bool all_joints_stopped();
+void send_msg(uint8_t* from, size_t size);
+int write_err(uint8_t* dest, size_t size, uint8_t code, char* msg);
+int write_err(uint8_t* dest, size_t size, uint8_t code, const char* msg);
+int parse_serial(uint8_t* dest, size_t dest_size, uint8_t* src, size_t src_size);
+int cmd_init(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_set(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_get(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_stp(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_rst(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+int cmd_hom(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+
 void setup()
 {
   // Initialize steppers, encoders, and limit switches
@@ -148,6 +165,8 @@ void loop()
         send_msg(obuf, 1);
         Serial.flush();
       }
+      break;
+    default:
       break;
   }
 
@@ -210,6 +229,9 @@ void run_steppers()
 
       case JOINT_STATE_MOVE_TO_SPEED:
         steppers[i]->runSpeedToPosition();
+        break;
+
+      default:
         break;
     }
   }
@@ -275,6 +297,32 @@ void send_msg(uint8_t* from, size_t size)
  * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
 int write_err(uint8_t* dest, size_t size, uint8_t code, char* msg)
+{
+  size_t msg_len = strlen(msg);
+
+  if (size < 4 + msg_len) {
+    return -1;
+  }
+
+  dest[0] = MSG_ERR;
+  dest[1] = code;
+  dest[2] = msg_len;
+  memcpy(dest + 3, msg, msg_len);
+
+  return 3 + msg_len;
+}
+
+/**
+ * Write an error message to a buffer. Returns the number of bytes written to the buffer, or -1 if
+ * the buffer is too small. This function does not add the start byte or checksum.
+ *
+ * @param[out] dest The buffer to write to
+ * @param[in] size The size of the buffer
+ * @param[in] code The error code
+ * @param[in] msg The error message
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
+ */
+int write_err(uint8_t* dest, size_t size, uint8_t code, const char* msg)
 {
   size_t msg_len = strlen(msg);
 
@@ -372,12 +420,10 @@ int cmd_init(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
   if (args_size != 0) {
-    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "CAL command does not take arguments");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "CAL command does not take arguments");
   }
 
   // Send acknowledgement
@@ -428,7 +474,7 @@ int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 
   robot_state.calibrated = true;
   dest[0] = MSG_DONE;
-  send_msg(dest, 1);
+  return 1;
 }
 
 /**
@@ -443,16 +489,13 @@ int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 int cmd_set(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
   if (!robot_state.calibrated) {
-    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
   }
   if (args_size != JOINT_COUNT * 2) {
-    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
   }
 
   // Parse arguments
@@ -463,7 +506,7 @@ int cmd_set(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
     // If the new position is not being skipped, and it is out of bounds, return an error.
     if (new_position != SKIP_BYTE &&
         (new_position > joints[i].max_steps || new_position < joints[i].min_steps)) {
-      char* msg = "Position XX out of bounds";
+      char msg[29];
       snprintf(msg, SIZE(msg), "Position %d out of bounds", new_position);
       return write_err(dest, dest_size, AR3_ERR_OOB, msg);
     }
@@ -492,16 +535,13 @@ int cmd_set(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 int cmd_get(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
   if (!robot_state.calibrated) {
-    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
   }
   if (args_size != 0) {
-    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "GET command does not take arguments");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "GET command does not take arguments");
   }
 
   // Read the current position of each joint and write it to the output buffer
@@ -527,16 +567,13 @@ int cmd_get(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
   if (!robot_state.calibrated) {
-    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
   }
   if (args_size != JOINT_COUNT * 6) {
-    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
   }
 
   // Parse arguments
@@ -549,7 +586,7 @@ int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
     // If the position is not being skipped, and it is out of bounds, return an error.
     if (position != SKIP_BYTE &&
         (position > joints[i].max_steps || position < joints[i].min_steps)) {
-      char* msg = "Position XX out of bounds";
+      char msg[29];
       snprintf(msg, SIZE(msg), "Position %d out of bounds", position);
       return write_err(dest, dest_size, AR3_ERR_OOB, msg);
     }
@@ -592,8 +629,7 @@ int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 int cmd_stp(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
 
   // Because stopping is so important, we accept the command even if the arguments are invalid.
@@ -637,16 +673,13 @@ int cmd_rst(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 int cmd_hom(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
   if (!robot_state.calibrated) {
-    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
   }
   if (args_size != 0) {
-    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
-    return;
+    return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
   }
 
   // Start moving each joint
