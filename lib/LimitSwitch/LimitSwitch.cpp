@@ -1,12 +1,11 @@
 /**
- * \file LimitSwitch.cpp
- * \author Zach Champion (zachchampion79@gmail.com)
+ * @file LimitSwitch.cpp
+ * @author Zach Champion (zachchampion79@gmail.com)
  *
- * \version 1.1
- * \date 2023-06-10
+ * @version 1.1
+ * @date 2023-06-10
  *
  * @copyright Copyright (c) 2023
- *
  */
 
 #include "LimitSwitch.hpp"

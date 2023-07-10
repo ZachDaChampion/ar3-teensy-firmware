@@ -9,6 +9,27 @@
 #define SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define JOINT_COUNT SIZE(joints)
 
+#define SKIP_BYTE 0x7FFF
+#define MSG_START 0x24
+#define MSG_ERR 0x00
+#define MSG_ACK 0x01
+#define MSG_DONE 0x02
+#define MSG_INIT 0x03
+#define MSG_CAL 0x04
+#define MSG_SET 0x05
+#define MSG_GET 0x06
+#define MSG_MOV 0x07
+#define MSG_STP 0x08
+#define MSG_RST 0x09
+#define MSG_HOM 0x0A
+#define MSG_POS 0x0B
+
+// Message lengths (in bytes) indexed by message type. -1 indicates a variable length message.
+static const size_t MSG_LEN[] = {
+  [MSG_ERR] = -1, [MSG_ACK] = 3,  [MSG_DONE] = 3, [MSG_INIT] = 5, [MSG_CAL] = 3, [MSG_SET] = 17,
+  [MSG_GET] = 3,  [MSG_MOV] = 45, [MSG_STP] = 4,  [MSG_RST] = 3,  [MSG_HOM] = 3, [MSG_POS] = 17,
+};
+
 struct JointConfig {
   const char* name;            // Name of the joint
 
@@ -45,14 +66,23 @@ enum JointState {
   JOINT_STATE_MOVE_AUTO,      // Joint is moving to a position at an automatically calculated speed
 };
 
+enum ActiveCommand {
+  ACTIVE_COMMAND_NONE,  // No command is currently active
+  ACTIVE_COMMAND_MOVE,  // The robot is currently moving to a position
+  ACTIVE_COMMAND_STOP,  // The robot is currently stopping
+};
+
 struct RobotState {
   bool firmware_matched = false;  // Whether the firmware version matches the expected version
   bool calibrated = false;        // Whether the robot has been calibrated
+  ActiveCommand active_command = ACTIVE_COMMAND_NONE;  // The currently active command
 };
 
-// ============================ ROBOT CONFIGURATION ============================
+//                                                                                                //
+// ==================================== ROBOT CONFIGURATION ===================================== //
+//                                                                                                //
 
-static const char* firmware_version = "1.0.0";
+const uint16_t firmware_version[] = { 0, 0 };  // [major, minor]
 
 static const JointConfig joints[] = {
 
@@ -72,7 +102,9 @@ static const JointConfig joints[] = {
   },
 };
 
-// ========================== END ROBOT CONFIGURATION ==========================
+//                                                                                                //
+// ================================== END ROBOT CONFIGURATION =================================== //
+//                                                                                                //
 
 static AccelStepper* steppers[JOINT_COUNT];
 static Encoder* encoders[JOINT_COUNT];
@@ -83,18 +115,14 @@ static RobotState robot_state;
 static JointState joint_states[JOINT_COUNT];
 
 // Serial buffer used for receiving commands
-static char ibuf[1024];
+static uint8_t ibuf[1024];
 static uint8_t ibuf_idx = 0;
 
 // Serial buffer used for sending responses
-static char obuf[1024];
+static uint8_t obuf[1024];
 
 void setup()
 {
-  // Ensure i/o buffers are null-terminated (for safety)
-  ibuf[SIZE(ibuf) - 1] = '\0';
-  obuf[SIZE(obuf) - 1] = '\0';
-
   // Initialize steppers, encoders, and limit switches
   for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
     steppers[i] = new AccelStepper(AccelStepper::DRIVER, joints[i].step_pin, joints[i].dir_pin);
@@ -108,42 +136,53 @@ void setup()
 
 void loop()
 {
+  run_steppers();
+
+  // Check if the active command is complete and send a `DONE` message if it is
+  switch (robot_state.active_command) {
+    case ACTIVE_COMMAND_MOVE:
+    case ACTIVE_COMMAND_STOP:
+      if (all_joints_stopped()) {
+        robot_state.active_command = ACTIVE_COMMAND_NONE;
+        obuf[0] = MSG_DONE;
+        send_msg(obuf, 1);
+        Serial.flush();
+      }
+      break;
+  }
+
   // Read a character from the serial port
   if (Serial.available()) {
-    char c = Serial.read();
+    uint8_t c = Serial.read();
 
-    // If the character is a newline, then we have received a complete command
-    if (c == '\n') {
-      ibuf[ibuf_idx] = '\0';
-      parse_serial(obuf, SIZE(obuf), ibuf);
-      send_msg(obuf);
-      ibuf_idx = 0;
-      goto update_hw;
+    // If we are currently receiving a command, or this is the start of a new command,
+    // then add the character to the buffer
+    if (ibuf_idx > 0 || c == MSG_START) {
+      ibuf[ibuf_idx++] = c;
     }
 
-    // If the character is whitespace, then ignore it
-    if (c == ' ' || c == '\t' || c == '\r') {
-      goto update_hw;
+    // If we have less than three bytes, the message is not complete. Wait for more bytes.
+    if (ibuf_idx < 3) {
+      return;
+    }
+
+    // If the message is complete, then process it
+    size_t full_msg_len = ibuf[1];
+    if (ibuf_idx == full_msg_len) {
+      int len = parse_serial(obuf, SIZE(obuf), ibuf, full_msg_len);
+      if (len < 0) send_msg(obuf, len);  // Ignore message if it couldn't fit in the buffer
+      ibuf_idx = 0;
+      return;
     }
 
     // If the buffer is full, send an error and reset the buffer
     if (ibuf_idx >= SIZE(ibuf)) {
-      write_err(obuf, SIZE(obuf), AR3_ERR_BUFFER_OVERFLOW, "Command buffer overflow");
-      send_msg(obuf);
+      size_t len = write_err(obuf, SIZE(obuf), AR3_ERR_BUFFER_OVERFLOW, "Command buffer overflow");
+      send_msg(obuf, len);
       ibuf_idx = 0;
-      goto update_hw;
-    }
-
-    // If we are currently receiving a command, or this is the start of a new command,
-    // then add the character to the buffer
-    if (ibuf_idx > 0 || c == '$') {
-      ibuf[ibuf_idx++] = c;
-      goto update_hw;
+      return;
     }
   }
-
-update_hw:
-  run_steppers();
 }
 
 /**
@@ -172,11 +211,21 @@ void run_steppers()
       case JOINT_STATE_MOVE_TO_SPEED:
         steppers[i]->runSpeedToPosition();
         break;
-
-      default:
-        break;
     }
   }
+}
+
+/**
+ * Check if all the stepper motors have stopped.
+ *
+ * @return True if all the stepper motors have stopped, false otherwise.
+ */
+bool all_joints_stopped()
+{
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    if (steppers[i]->isRunning()) return false;
+  }
+  return true;
 }
 
 /**
@@ -184,7 +233,7 @@ void run_steppers()
  * deceleration values, so the motors may not stop immediately. Set the `immediate` parameter to
  * `true` to stop the motors immediately.
  *
- * \param[in] immediate Whether to stop the motors immediately or not.
+ * @param[in] immediate Whether to stop the motors immediately or not.
  */
 void stop_all(bool immediate = false)
 {
@@ -197,204 +246,144 @@ void stop_all(bool immediate = false)
       steppers[i]->stop();
       joint_states[i] = JOINT_STATE_STOPPING;
     }
+    robot_state.active_command = ACTIVE_COMMAND_STOP;
   }
 }
 
 /**
- * Send a message to the serial port. This function adds the '$', the '*', the checksum, and the
- * newline.
+ * Send a message to the serial port. This function adds the start byte and checksum.
  *
- * \param[in] from Buffer to send.
+ * @param[in] from Buffer to send.
+ * @param[in] size Size of the buffer.
  */
-void send_msg(char* from)
+void send_msg(uint8_t* from, size_t size)
 {
-  uint8_t checksum = calc_checksum(from);
-  Serial.printf("$%s*%02X\n", from, checksum);
+  uint8_t checksum = crc8ccitt(from, size);
+  Serial.write(MSG_START);
+  Serial.write(from, size);
+  Serial.write(checksum);
 }
 
 /**
- * Write an error message to a buffer.
+ * Write an error message to a buffer. Returns the number of bytes written to the buffer, or -1 if
+ * the buffer is too small. This function does not add the start byte or checksum.
  *
- * \param[out] dest The buffer to write to
- * \param[in] size The size of the buffer
- * \param[in] code The error code
- * \param[in] msg The error message
+ * @param[out] dest The buffer to write to
+ * @param[in] size The size of the buffer
+ * @param[in] code The error code
+ * @param[in] msg The error message
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-int write_err(char* dest, size_t size, uint8_t code, char* msg)
+int write_err(uint8_t* dest, size_t size, uint8_t code, char* msg)
 {
-  return snprintf(obuf, size, "ERR;%d;%s;", code, msg);
-}
+  size_t msg_len = strlen(msg);
 
-/**
- * Implementation of strtok_r from the standard library. It is not available on the Teensy.
- * See <https://linux.die.net/man/3/strtok_r> for more information.
- *
- * \param[in] str The string to tokenize
- * \param[in] delim The delimiter to use
- * \param[out] save_ptr The save pointer
- * \return The next token
- */
-char* strtok_r(char* str, const char* delim, char** save_ptr)
-{
-  if (str == NULL) str = *save_ptr;
-  if (*str == '\0') return NULL;
-
-  char* end = strpbrk(str, delim);
-  if (end == NULL) {
-    *save_ptr = str + strlen(str);
-    return str;
+  if (size < 4 + msg_len) {
+    return -1;
   }
 
-  *end = '\0';
-  *save_ptr = end + 1;
-  return str;
+  dest[0] = MSG_ERR;
+  dest[1] = code;
+  dest[2] = msg_len;
+  memcpy(dest + 3, msg, msg_len);
+
+  return 3 + msg_len;
 }
 
 /**
  * Parse an input from the serial port.
  *
- * \param[out] dest Destination to write the response to
- * \param[in] size Size of the destination buffer
- * \param[in] from Input buffer to parse
+ * @param[out] dest Destination to write the response to
+ * @param[in] dest_size Size of the destination buffer
+ * @param[in] src Source buffer
+ * @param[in] src_size Size of the source buffer
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-void parse_serial(char* dest, size_t size, char* from)
+int parse_serial(uint8_t* dest, size_t dest_size, uint8_t* src, size_t src_size)
 {
-  // Check if beginning of message is valid
-  if (from[0] != '$') {
-    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Command must start with '$'");
-    return;
+  if (src[0] != MSG_START) {
+    return write_err(dest, dest_size, AR3_ERR_INVALID_COMMAND, "Command must start with '$'");
   }
 
-  // Separate message and checksum
-  char* msg = strtok(from, "*");
-  char* checksum = strtok(NULL, "*");
-  if (msg == NULL || checksum == NULL) {
-    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
-    return;
+  // Verify checksum
+  uint8_t checksum = crc8ccitt(src + 1, src_size - 2);
+  if (checksum != src[src_size - 1]) {
+    return write_err(dest, dest_size, AR3_ERR_INVALID_CHECKSUM, "Invalid checksum");
   }
-  if (!verify_checksum(msg, checksum)) {
-    write_err(dest, size, AR3_ERR_INVALID_CHECKSUM, "Invalid checksum");
-    return;
-  }
-
-  // Parse the command
-  char* cmd = strtok(msg, ";");
-  if (cmd == NULL) {
-    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
-    return;
-  }
-  char* args = strtok(NULL, ";");
 
   // Run the command
-  if (strcmp(cmd, "INIT") == 0)
-    cmd_init(dest, size, args);
-  else if (strcmp(cmd, "CAL") == 0)
-    cmd_cal(dest, size, args);
-  else if (strcmp(cmd, "SET") == 0)
-    cmd_set(dest, size, args);
-  else if (strcmp(cmd, "MV") == 0)
-    cmd_mv(dest, size, args);
-  else if (strcmp(cmd, "MVR") == 0)
-    cmd_stp(dest, size, args);
-  else if (strcmp(cmd, "GET") == 0)
-    cmd_get(dest, size, args);
-  else if (strcmp(cmd, "RST") == 0)
-    cmd_rst(dest, size, args);
-  else if (strcmp(cmd, "HOME") == 0)
-    cmd_home(dest, size, args);
-  else
-    write_err(dest, size, AR3_ERR_INVALID_COMMAND, "Invalid command");
-}
-
-struct ParsedArg {
-  char* label;
-  char* vals[4];
-  uint8_t count;
-};
-
-/**
- * Parse a single argument into a label and an array of values.
- *
- * \param[in] arg The argument to parse
- * \param[in] default_label The default label to use if none is specified
- * \return The parsed argument
- */
-ParsedArg parse_arg(char* arg, const char* default_label)
-{
-  // Parse label
-  ParsedArg ret;
-  char* save_ptr;
-  char* delim = strchr(arg, ':');
-  if (delim == NULL) {
-    ret.label = (char*)default_label;
-    delim = arg;
-  } else {
-    *delim = '\0';
-    ret.label = arg;
-    delim++;
+  switch (src[1]) {
+    case MSG_INIT:
+      return cmd_init(dest, dest_size, src + 2, src_size - 3);
+    case MSG_CAL:
+      return cmd_cal(dest, dest_size, src + 2, src_size - 3);
+    case MSG_SET:
+      return cmd_set(dest, dest_size, src + 2, src_size - 3);
+    case MSG_GET:
+      return cmd_get(dest, dest_size, src + 2, src_size - 3);
+    case MSG_MOV:
+      return cmd_mov(dest, dest_size, src + 2, src_size - 3);
+    case MSG_STP:
+      return cmd_stp(dest, dest_size, src + 2, src_size - 3);
+    case MSG_RST:
+      return cmd_rst(dest, dest_size, src + 2, src_size - 3);
+    case MSG_HOM:
+      return cmd_hom(dest, dest_size, src + 2, src_size - 3);
+    default:
+      return write_err(dest, dest_size, AR3_ERR_INVALID_COMMAND, "Invalid command");
   }
-
-  // Parse values
-  while (ret.count < SIZE(ret.vals)) {
-    char* val = strtok_r(delim, ",", &save_ptr);
-    if (val == NULL) break;
-    ret.vals[ret.count++] = val;
-    delim = NULL;
-  }
-
-  return ret;
 }
 
 /**
  * Handle the INIT command. Initialize the robot and ensure firmware is correct.
  *
- * \param[out] dest Output buffer to write to
- * \param[in] size Size of the output buffer
- * \param[in] args  Command arguments
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args Command payload
+ * @param[in] args_size Size of the command payload
+ *  @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-void cmd_init(char* dest, size_t size, char* args)
+int cmd_init(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
-  ParsedArg arg = parse_arg(args, "v");
-  if (strcmp(arg.label, "v")) {
-    char msg[32];
-    snprintf(msg, SIZE(msg), "Invalid argument '%s'", arg.label);
-    write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
-    return;
-  }
-  if (arg.count != 1) {
-    write_err(dest, size, AR3_ERR_MALFORMED_ARG, "Invalid number of arguments");
-    return;
-  }
+  if (args_size != 2)
+    return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
 
-  // Check firmware version
-  if (strcmp(arg.vals[0], firmware_version) != 0) {
-    char msg[64];
-    snprintf(msg, SIZE(msg), "Running firmware %s, expected %s", firmware_version, arg.vals[0]);
-    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, msg);
-    return;
+  // Verify firmware version
+  uint8_t firmware_major = args[0];
+  uint8_t firmware_minor = args[1];
+  if (firmware_major != firmware_version[0] || firmware_minor != firmware_version[1]) {
+    return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Invalid firmware version");
   }
 
   robot_state.firmware_matched = true;
-  snprintf(dest, size, "OK;");
+  dest[0] = MSG_ACK;
+  return 1;
 }
 
 /**
  * Handle the CAL command. Calibrate the robot.
  *
- * \param[out] dest Output buffer to write to
- * \param[in] size Size of the output buffer
- * \param[in] args  Command arguments
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args  Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-void cmd_cal(char* dest, size_t size, char* args)
+int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
     return;
   }
-  if (args != NULL) {
-    write_err(dest, size, AR3_ERR_INVALID_ARG, "CAL does not take arguments");
+  if (args_size != 0) {
+    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "CAL command does not take arguments");
     return;
   }
+
+  // Send acknowledgement
+  dest[0] = MSG_ACK;
+  send_msg(dest, 1);
+  Serial.flush();
 
   uint16_t hit_limit_switches = 0;  // Bitfield of which joints have hit their limit switches.
   uint8_t calibrated_count = 0;     // Number of joints that have been calibrated.
@@ -438,232 +427,235 @@ void cmd_cal(char* dest, size_t size, char* args)
   }
 
   robot_state.calibrated = true;
-  snprintf(dest, size, "OK;");
+  dest[0] = MSG_DONE;
+  send_msg(dest, 1);
 }
 
 /**
  * Handle the SET command. Set the current position of one or more joints.
  *
- * \param[out] dest Output buffer to write to
- * \param[in] size Size of the output buffer
- * \param[in] args  Command arguments
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-void cmd_set(char* dest, size_t size, char* args)
+int cmd_set(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
     return;
   }
   if (!robot_state.calibrated) {
-    write_err(dest, size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    return;
+  }
+  if (args_size != JOINT_COUNT * 2) {
+    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
     return;
   }
 
-  // Parse arguments and set joint positions
-  for (uint8_t i = 0; args != NULL; ++i) {
-    ParsedArg arg = parse_arg(args, joints[i].name);
+  // Parse arguments
+  uint16_t new_positions[JOINT_COUNT];
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    uint16_t new_position = args[i * 2] | (args[i * 2 + 1] << 8);
 
-    // Find the joint with the given label
-    uint8_t joint_idx;
-    for (joint_idx = 0; joint_idx < JOINT_COUNT; ++joint_idx) {
-      if (strcmp(arg.label, joints[joint_idx].name) == 0) break;
-    }
-    if (joint_idx == JOINT_COUNT) {
-      stop_all();
-      char msg[32];
-      snprintf(msg, SIZE(msg), "Invalid joint '%s'", arg.label);
-      write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
-      return;
+    // If the new position is not being skipped, and it is out of bounds, return an error.
+    if (new_position != SKIP_BYTE &&
+        (new_position > joints[i].max_steps || new_position < joints[i].min_steps)) {
+      char* msg = "Position XX out of bounds";
+      snprintf(msg, SIZE(msg), "Position %d out of bounds", new_position);
+      return write_err(dest, dest_size, AR3_ERR_OOB, msg);
     }
 
-    // Check that the number of arguments is correct
-    if (arg.count != 1) {
-      stop_all();
-      char msg[64];
-      snprintf(msg, SIZE(msg), "Invalid number of arguments for joint '%s'", arg.label);
-      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-      return;
-    }
-
-    // Check that the argument is a valid number
-    char* endptr;
-    long new_steps = strtol(arg.vals[0], &endptr, 10);
-    if (*endptr != '\0') {
-      stop_all();
-      char msg[128];
-      snprintf(msg, SIZE(msg), "Invalid argument '%s' for joint '%s'", arg.vals[0], arg.label);
-      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-      return;
-    }
-    if (new_steps < joints[i].min_steps || new_steps > joints[i].max_steps) {
-      stop_all();
-      char msg[128];
-      snprintf(msg, SIZE(msg), "Argument '%s' for joint '%s' is out of range", arg.vals[0],
-               arg.label);
-      write_err(dest, size, AR3_ERR_OOB, msg);
-      return;
-    }
-
-    // Set the new position
-    steppers[joint_idx]->setCurrentPosition(new_steps);
+    new_positions[i] = new_position;
   }
 
-  snprintf(dest, size, "OK;");
+  // Set the new position for each joint
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    if (new_positions[i] != SKIP_BYTE) steppers[i]->setCurrentPosition(new_positions[i]);
+  }
+
+  dest[0] = MSG_ACK;
+  return 1;
 }
 
 /**
- * Handle the MV command. Move one or more joints to a position.
+ * Handles the GET command. Get the current positions of the joints.
  *
- * \param[out] dest Output buffer to write to
- * \param[in] size Size of the output buffer
- * \param[in] args  Command arguments
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-void cmd_mv(char* dest, size_t size, char* args)
+int cmd_get(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
     return;
   }
   if (!robot_state.calibrated) {
-    write_err(dest, size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    return;
+  }
+  if (args_size != 0) {
+    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "GET command does not take arguments");
     return;
   }
 
-  uint16_t joints_to_move = 0;  // bitfield of joints to move
+  // Read the current position of each joint and write it to the output buffer
+  dest[0] = MSG_POS;
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    uint16_t position = steppers[i]->currentPosition();
+    dest[i * 2 + 1] = position & 0xFF;
+    dest[i * 2 + 2] = (position >> 8) & 0xFF;
+  }
 
-  // Parse arguments and move joints
+  return 1 + JOINT_COUNT * 2;
+}
+
+/**
+ * Handle the MOV command. Move one or more joints to a position.
+ *
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args  Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
+ */
+int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
+{
+  if (!robot_state.firmware_matched) {
+    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    return;
+  }
+  if (!robot_state.calibrated) {
+    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    return;
+  }
+  if (args_size != JOINT_COUNT * 6) {
+    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
+    return;
+  }
+
+  // Parse arguments
+  uint16_t positions[JOINT_COUNT];
+  float speeds[JOINT_COUNT];
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    uint16_t position = args[i * 6] | (args[i * 6 + 1] << 8);
+    float speed = *((float*)(args + i * 6 + 2));  // Floats don't care about endianness
+
+    // If the position is not being skipped, and it is out of bounds, return an error.
+    if (position != SKIP_BYTE &&
+        (position > joints[i].max_steps || position < joints[i].min_steps)) {
+      char* msg = "Position XX out of bounds";
+      snprintf(msg, SIZE(msg), "Position %d out of bounds", position);
+      return write_err(dest, dest_size, AR3_ERR_OOB, msg);
+    }
+
+    // Clamp the speed to the maximum speed
+    if (speed < 0) speed = 0;
+    if (speed > joints[i].max_speed) speed = joints[i].max_speed;
+
+    positions[i] = position;
+    speeds[i] = speed;
+  }
+
+  // Start moving each joint
   for (uint8_t i = 0; args != NULL; ++i) {
-    ParsedArg arg = parse_arg(args, joints[i].name);
+    if (positions[i] == SKIP_BYTE) continue;
 
-    // Find the joint with the given label
-    uint8_t joint_idx;
-    for (joint_idx = 0; joint_idx < JOINT_COUNT; ++joint_idx) {
-      if (strcmp(arg.label, joints[joint_idx].name) == 0) break;
-    }
-    if (joint_idx == JOINT_COUNT) {
-      stop_all();
-      char msg[32];
-      snprintf(msg, SIZE(msg), "Invalid joint '%s'", arg.label);
-      write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
-      return;
-    }
-
-    // Check that the number of arguments is correct
-    if (arg.count < 1 || arg.count > 2) {
-      stop_all();
-      char msg[64];
-      snprintf(msg, SIZE(msg), "Invalid number of arguments for joint '%s'", arg.label);
-      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-      return;
-    }
-
-    // Parse new target position
-    char* endptr;
-    long new_target = strtol(arg.vals[0], &endptr, 10);
-    if (*endptr != '\0') {
-      stop_all();
-      char msg[128];
-      snprintf(msg, SIZE(msg), "Invalid destination '%s' for joint '%s'", arg.vals[0], arg.label);
-      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-      return;
-    }
-    if (new_target < joints[i].min_steps || new_target > joints[i].max_steps) {
-      stop_all();
-      char msg[128];
-      snprintf(msg, SIZE(msg), "Destination '%s' for joint '%s' is out of range", arg.vals[0],
-               arg.label);
-      write_err(dest, size, AR3_ERR_OOB, msg);
-      return;
-    }
-
-    // Parse speed if given
-    float move_speed = 0;
-    if (arg.count == 2) {
-      move_speed = strtof(arg.vals[1], &endptr);
-      if (*endptr != '\0') {
-        stop_all();
-        char msg[128];
-        snprintf(msg, SIZE(msg), "Invalid speed '%s' for joint '%s'", arg.vals[1], arg.label);
-        write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-        return;
-      }
-      if (move_speed < -joints[i].max_speed || move_speed > joints[i].max_speed) {
-        stop_all();
-        char msg[128];
-        snprintf(msg, SIZE(msg), "Speed '%s' for joint '%s' is out of range", arg.vals[1],
-                 arg.label);
-        write_err(dest, size, AR3_ERR_OOB, msg);
-        return;
-      }
-    }
-
-    // Set the new target position
-    steppers[joint_idx]->moveTo(new_target);
-    if (move_speed == 0) {
-      joint_states[joint_idx] = JOINT_STATE_MOVE_AUTO;
+    steppers[i]->moveTo(positions[i]);
+    if (speeds[i] == 0) {
+      joint_states[i] = JOINT_STATE_MOVE_AUTO;
     } else {
-      steppers[joint_idx]->setSpeed(move_speed);
-      joint_states[joint_idx] = JOINT_STATE_MOVE_TO_SPEED;
-    }
-    joints_to_move |= (1 << joint_idx);
-  }
-
-  // Wait for all joints to finish moving
-  while (joints_to_move != 0) {
-    for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
-      if (joints_to_move & (1 << i) && !steppers[i]->isRunning()) {
-        joints_to_move &= ~(1 << i);
-        joint_states[i] = JOINT_STATE_HOLD;
-      }
+      steppers[i]->setSpeed(speeds[i]);
+      joint_states[i] = JOINT_STATE_MOVE_TO_SPEED;
     }
   }
 
-  snprintf(dest, size, "OK;");
+  robot_state.active_command = ACTIVE_COMMAND_MOVE;
+  dest[0] = MSG_ACK;
+  return 1;
 }
 
 /**
  * Handle the STP command. Stops all joints.
  *
- * \param[out] dest Output buffer to write to
- * \param[in] size Size of the output buffer
- * \param[in] args  Command arguments
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args  Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
  */
-void cmd_stp(char* dest, size_t size, char* args)
+int cmd_stp(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 {
   if (!robot_state.firmware_matched) {
-    write_err(dest, size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
     return;
   }
 
-  uint8_t immediate = 0;
-  if (args != NULL) {
-    ParsedArg arg = parse_arg(args, "i");
-    if (strcmp(arg.label, "i") != 0) {
-      stop_all();
-      char msg[64];
-      snprintf(msg, SIZE(msg), "Invalid argument '%s'", arg.label);
-      write_err(dest, size, AR3_ERR_INVALID_ARG, msg);
-      return;
-    }
-    if (arg.count != 1) {
-      stop_all();
-      char msg[64];
-      snprintf(msg, SIZE(msg), "Invalid number of arguments for 'i'");
-      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-      return;
-    }
+  // Because stopping is so important, we accept the command even if the arguments are invalid.
+  bool smooth = args_size > 0 && args[0] == 1;
+  stop_all(!smooth);
 
-    if (strcmp(arg.vals[0], "1") == 0) {
-      immediate = 1;
-    } else if (strcmp(arg.vals[0], "0") != 0) {
-      stop_all();
-      char msg[64];
-      snprintf(msg, SIZE(msg), "Invalid value '%s' for 'i'", arg.vals[0]);
-      write_err(dest, size, AR3_ERR_MALFORMED_ARG, msg);
-      return;
-    }
+  robot_state.active_command = ACTIVE_COMMAND_STOP;
+  dest[0] = MSG_ACK;
+  return 1;
+}
+
+/**
+ * Handle the RST command. Resets the robot, but does not move joints.
+ *
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args  Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
+ */
+int cmd_rst(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
+{
+  stop_all(false);
+  robot_state.active_command = ACTIVE_COMMAND_STOP;
+  robot_state.calibrated = false;
+  robot_state.firmware_matched = false;
+
+  dest[0] = MSG_ACK;
+  return 1;
+}
+
+/**
+ * Handle the HOM command. Moves all joints to their home position.
+ *
+ * @param[out] dest Output buffer to write to
+ * @param[in] dest_size Size of the output buffer
+ * @param[in] args  Command arguments
+ * @param[in] args_size Size of the command arguments
+ * @return The number of bytes written to the buffer, or -1 if the buffer is too small
+ */
+int cmd_hom(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
+{
+  if (!robot_state.firmware_matched) {
+    write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
+    return;
+  }
+  if (!robot_state.calibrated) {
+    write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
+    return;
+  }
+  if (args_size != 0) {
+    write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "Invalid payload size");
+    return;
   }
 
-  stop_all(immediate == 1);
-  snprintf(dest, size, "OK;");
+  // Start moving each joint
+  for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
+    steppers[i]->moveTo(0);
+    joint_states[i] = JOINT_STATE_MOVE_AUTO;
+  }
+
+  robot_state.active_command = ACTIVE_COMMAND_MOVE;
+  dest[0] = MSG_ACK;
+  return 1;
 }
