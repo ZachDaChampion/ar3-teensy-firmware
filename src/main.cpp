@@ -25,7 +25,7 @@
 #define MSG_POS 0x0B
 
 // Message lengths (in bytes) indexed by message type. -1 indicates a variable length message.
-static const size_t MSG_LEN[] = {
+static const size_t msg_len[] = {
   [MSG_ERR] = (size_t)-1, [MSG_ACK] = 3,  [MSG_DONE] = 3, [MSG_INIT] = 5,
   [MSG_CAL] = 3,          [MSG_SET] = 17, [MSG_GET] = 3,  [MSG_MOV] = 45,
   [MSG_STP] = 4,          [MSG_RST] = 3,  [MSG_HOM] = 3,  [MSG_POS] = 17,
@@ -80,10 +80,10 @@ struct RobotState {
 };
 
 //                                                                                                //
-// ==================================== ROBOT CONFIGURATION ===================================== //
+// ==================================== Robot configuration ===================================== //
 //                                                                                                //
 
-const uint16_t firmware_version[] = { 0, 0 };  // [major, minor]
+static const uint16_t firmware_version[] = { 0, 0 };  // [major, minor]
 
 static const JointConfig joints[] = {
 
@@ -104,7 +104,7 @@ static const JointConfig joints[] = {
 };
 
 //                                                                                                //
-// ================================== END ROBOT CONFIGURATION =================================== //
+// ======================================== Global data ========================================= //
 //                                                                                                //
 
 static AccelStepper* steppers[JOINT_COUNT];
@@ -137,6 +137,10 @@ int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
 int cmd_stp(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
 int cmd_rst(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
 int cmd_hom(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size);
+
+//                                                                                                //
+// ================================= Arduino control functions ================================== //
+//                                                                                                //
 
 void setup()
 {
@@ -185,8 +189,18 @@ void loop()
       return;
     }
 
-    // If the message is complete, then process it
-    size_t full_msg_len = ibuf[1];
+    // If the message type is invalid, send an error and reset the buffer.
+    uint8_t msg_type = ibuf[1];
+    if (msg_type > SIZE(msg_len)) {
+      size_t len = write_err(obuf, SIZE(obuf), AR3_ERR_INVALID_COMMAND, "Invalid message type");
+      send_msg(obuf, len);
+      ibuf_idx = 0;
+      return;
+    }
+
+    // If the message is complete, then process it. We can use the `msg_len` array to look up the
+    // expected length because we do not receive any messages of variable length.
+    size_t full_msg_len = msg_len[msg_type];
     if (ibuf_idx == full_msg_len) {
       int len = parse_serial(obuf, SIZE(obuf), ibuf, full_msg_len);
       if (len < 0) send_msg(obuf, len);  // Ignore message if it couldn't fit in the buffer
@@ -203,6 +217,10 @@ void loop()
     }
   }
 }
+
+//                                                                                                //
+// ===================================== Utility functions ====================================== //
+//                                                                                                //
 
 /**
  * Run the stepper motors. This function should be called frequently.
@@ -337,6 +355,10 @@ int write_err(uint8_t* dest, size_t size, uint8_t code, const char* msg)
 
   return 3 + msg_len;
 }
+
+//                                                                                                //
+// ====================================== Serial interface ====================================== //
+//                                                                                                //
 
 /**
  * Parse an input from the serial port.
