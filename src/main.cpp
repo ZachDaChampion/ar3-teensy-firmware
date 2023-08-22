@@ -32,30 +32,31 @@ static const size_t msg_len[] = {
 };
 
 struct JointConfig {
-  const char* name;            // Name of the joint
+  const char* name;  // Name of the joint
 
-  long min_steps;              // Most negative position of the joint (in steps)
-  long max_steps;              // Most positive position of the joint (in steps)
-  long ref_steps;              // Position of the joint when it touches the limit switch (in steps)
-  int steps_per_rev;           // Number of steps per revolution of the stepper motor
+  long min_steps;         // Most negative position of the joint (in steps)
+  long max_steps;         // Most positive position of the joint (in steps)
+  long ref_steps;         // Position of the joint when it touches the limit switch (in steps)
+  int steps_per_rev;      // Number of steps per revolution of the stepper motor
+  int enc_steps_per_rev;  // Number of steps per revolution of the encoder
 
-  float max_speed;             // Maximum speed of the joint (in steps per second)
-  float max_accel;             // Maximum acceleration of the joint (in steps per second per second)
+  float max_speed;  // Maximum speed of the joint (in steps per second)
+  float max_accel;  // Maximum acceleration of the joint (in steps per second per second)
 
-  float calibration_speed;     // Speed of the joint during calibration (in steps per second). Sign
-                               // determines the direction of calibration. `direction` is ignored
-                               // during calibration.
+  float calibration_speed;  // Speed of the joint during calibration (in steps per second). Sign
+                            // determines the direction of calibration. `direction` is ignored
+                            // during calibration.
 
-  uint8_t step_pin;            // Step pin of the motor controller
-  uint8_t dir_pin;             // Direction pin of the motor controller
+  uint8_t step_pin;  // Step pin of the motor controller
+  uint8_t dir_pin;   // Direction pin of the motor controller
 
-  uint8_t enc_a_pin;           // Encoder A pin
-  uint8_t enc_b_pin;           // Encoder B pin
+  uint8_t enc_a_pin;  // Encoder A pin
+  uint8_t enc_b_pin;  // Encoder B pin
 
   uint8_t lim_pin;             // Limit switch pin
   uint16_t lim_debounce_time;  // Debounce time for the limit switch
 
-  int8_t direction;            // 1 if the joint is not reversed, -1 if it is reversed
+  int8_t direction;  // 1 if the joint is not reversed, -1 if it is reversed
 };
 
 enum JointState {
@@ -94,6 +95,7 @@ static const JointConfig joints[] = {
       .max_steps = 0,
       .ref_steps = 0,
       .steps_per_rev = 0,
+      .enc_steps_per_rev = 0,
       .step_pin = 0,
       .dir_pin = 0,
       .enc_a_pin = 0,
@@ -157,6 +159,8 @@ void setup()
 
 void loop()
 {
+  // TODO: Update stepper positions from encoders
+
   run_steppers();
 
   // Check if the active command is complete and send a `DONE` message if it is
@@ -479,6 +483,8 @@ int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
         steppers[i]->setCurrentPosition(joints[i].ref_steps);
         steppers[i]->moveTo(0);
         steppers[i]->setSpeed(joints[i].calibration_speed);
+        encoders[i]->write(joints[i].ref_steps * joints[i].enc_steps_per_rev /
+                           joints[i].steps_per_rev);
         joint_states[i] = JOINT_STATE_MOVE_TO_SPEED;
         hit_limit_switches |= (1 << i);
         continue;
