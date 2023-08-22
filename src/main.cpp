@@ -83,7 +83,7 @@ struct RobotState {
 // ==================================== Robot configuration ===================================== //
 //                                                                                                //
 
-static const uint16_t firmware_version[] = { 0, 0 };  // [major, minor]
+static const uint16_t firmware_version[] = { 1, 0 };  // [major, minor]
 
 static const JointConfig joints[] = {
 
