@@ -1,0 +1,1 @@
+python .pio\libdeps\teensy41\Nanopb\generator\nanopb_generator.py -I proto -D src/proto proto/errors.proto proto/log.proto proto/request.proto proto/response.proto
