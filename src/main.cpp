@@ -27,8 +27,8 @@
 // Message lengths (in bytes) indexed by message type. -1 indicates a variable length message.
 static const size_t msg_len[] = {
   [MSG_ERR] = (size_t)-1, [MSG_ACK] = 3,  [MSG_DONE] = 3, [MSG_INIT] = 5,
-  [MSG_CAL] = 3,          [MSG_SET] = 17, [MSG_GET] = 3,  [MSG_MOV] = 45,
-  [MSG_STP] = 4,          [MSG_RST] = 3,  [MSG_HOM] = 3,  [MSG_POS] = 17,
+  [MSG_CAL] = 3,          [MSG_SET] = 15, [MSG_GET] = 3,  [MSG_MOV] = 39,
+  [MSG_STP] = 4,          [MSG_RST] = 3,  [MSG_HOM] = 3,  [MSG_POS] = 15,
 };
 
 struct JointConfig {
@@ -38,7 +38,8 @@ struct JointConfig {
   long max_steps;         // Most positive position of the joint (in steps)
   long ref_steps;         // Position of the joint when it touches the limit switch (in steps)
   int steps_per_rev;      // Number of steps per revolution of the stepper motor
-  int enc_steps_per_rev;  // Number of steps per revolution of the encoder
+  int enc_steps_per_rev;  // Number of steps per revolution of the motor
+  float gear_reduction;   // Gear reduction of the joint
 
   float max_speed;  // Maximum speed of the joint (in steps per second)
   float max_accel;  // Maximum acceleration of the joint (in steps per second per second)
@@ -89,20 +90,119 @@ static const uint16_t firmware_version[] = { 1, 0 };  // [major, minor]
 static const JointConfig joints[] = {
 
   {
-      // Joint 0
-      .name = "j0",
-      .min_steps = 0,
-      .max_steps = 0,
-      .ref_steps = 0,
-      .steps_per_rev = 0,
-      .enc_steps_per_rev = 0,
+      // Joint 1 (base)
+      .name = "j1",
+      .min_steps = 0,             // TODO
+      .max_steps = 0,             // TODO
+      .ref_steps = 0,             // TODO
+      .steps_per_rev = 400,       // From old firmware (wrong?)
+      .enc_steps_per_rev = 2048,  // Calculated from old firmware (wrong?)
+      .gear_reduction = 7,
+      .max_speed = 1500,
+      .max_accel = 250,
+      .calibration_speed = 150,
       .step_pin = 0,
-      .dir_pin = 0,
-      .enc_a_pin = 0,
-      .enc_b_pin = 0,
-      .lim_pin = 0,
+      .dir_pin = 1,
+      .enc_a_pin = 14,
+      .enc_b_pin = 15,
+      .lim_pin = 26,
       .direction = 1,
   },
+  {
+      // Joint 2 (shoulder)
+      .name = "j2",
+      .min_steps = 0,             // TODO
+      .max_steps = 0,             // TODO
+      .ref_steps = 0,             // TODO
+      .steps_per_rev = 400,       // From old firmware (wrong?)
+      .enc_steps_per_rev = 2048,  // Calculated from old firmware (wrong?)
+      .gear_reduction = 50,
+      .max_speed = 1500,
+      .max_accel = 250,
+      .calibration_speed = 150,
+      .step_pin = 2,
+      .dir_pin = 3,
+      .enc_a_pin = 16,
+      .enc_b_pin = 17,
+      .lim_pin = 27,
+      .direction = 1,
+  },
+  {
+      // Joint 3 (elbow)
+      .name = "j3",
+      .min_steps = 0,             // TODO
+      .max_steps = 0,             // TODO
+      .ref_steps = 0,             // TODO
+      .steps_per_rev = 400,       // From old firmware (wrong?)
+      .enc_steps_per_rev = 2048,  // Calculated from old firmware (wrong?)
+      .gear_reduction = 50,
+      .max_speed = 1500,
+      .max_accel = 250,
+      .calibration_speed = 150,
+      .step_pin = 4,
+      .dir_pin = 5,
+      .enc_a_pin = 18,
+      .enc_b_pin = 19,
+      .lim_pin = 28,
+      .direction = 1,
+  },
+  {
+      // Joint 4 (forearm roll)
+      .name = "j4",
+      .min_steps = 0,             // TODO
+      .max_steps = 0,             // TODO
+      .ref_steps = 0,             // TODO
+      .steps_per_rev = 400,       // From old firmware (wrong?)
+      .enc_steps_per_rev = 2048,  // Calculated from old firmware (wrong?)
+      .gear_reduction = 39.2,
+      .max_speed = 1500,
+      .max_accel = 250,
+      .calibration_speed = 150,
+      .step_pin = 6,
+      .dir_pin = 7,
+      .enc_a_pin = 20,
+      .enc_b_pin = 21,
+      .lim_pin = 29,
+      .direction = 1,
+  },
+  {
+      // Joint 5 (wrist pitch)
+      .name = "j5",
+      .min_steps = 0,             // TODO
+      .max_steps = 0,             // TODO
+      .ref_steps = 0,             // TODO
+      .steps_per_rev = 800,       // From old firmware (wrong?)
+      .enc_steps_per_rev = 2048,  // Calculated from old firmware (wrong?)
+      .gear_reduction = 9.1455,
+      .max_speed = 1500,
+      .max_accel = 250,
+      .calibration_speed = 150,
+      .step_pin = 8,
+      .dir_pin = 9,
+      .enc_a_pin = 22,
+      .enc_b_pin = 23,
+      .lim_pin = 30,
+      .direction = 1,
+  },
+  {
+      // Joint 6 (wrist roll)
+      .name = "j6",
+      .min_steps = 0,             // TODO
+      .max_steps = 0,             // TODO
+      .ref_steps = 0,             // TODO
+      .steps_per_rev = 400,       // From old firmware (wrong?)
+      .enc_steps_per_rev = 2048,  // Calculated from old firmware (wrong?)
+      .gear_reduction = 19,
+      .max_speed = 1500,
+      .max_accel = 250,
+      .calibration_speed = 150,
+      .step_pin = 10,
+      .dir_pin = 11,
+      .enc_a_pin = 24,
+      .enc_b_pin = 25,
+      .lim_pin = 31,
+      .direction = 1,
+  }
 };
 
 //                                                                                                //
@@ -155,6 +255,8 @@ void setup()
     limit_switches[i] = new LimitSwitch(joints[i].lim_pin);
     joint_states[i] = JOINT_STATE_OFF;
   }
+
+  Serial.begin(115200);
 }
 
 void loop()
@@ -188,6 +290,13 @@ void loop()
       ibuf[ibuf_idx++] = c;
     }
 
+    // Serial.print("Received: ");
+    // for (uint8_t i = 0; i < ibuf_idx; ++i) {
+    //   Serial.print(ibuf[i], HEX);
+    //   Serial.print(" ");
+    // }
+    // Serial.println();
+
     // If we have less than three bytes, the message is not complete. Wait for more bytes.
     if (ibuf_idx < 3) {
       return;
@@ -207,7 +316,7 @@ void loop()
     size_t full_msg_len = msg_len[msg_type];
     if (ibuf_idx == full_msg_len) {
       int len = parse_serial(obuf, SIZE(obuf), ibuf, full_msg_len);
-      if (len < 0) send_msg(obuf, len);  // Ignore message if it couldn't fit in the buffer
+      if (len != -1) send_msg(obuf, len);  // Ignore message if it couldn't fit in the buffer
       ibuf_idx = 0;
       return;
     }
@@ -234,15 +343,13 @@ void run_steppers()
   for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
     switch (joint_states[i]) {
       case JOINT_STATE_STOPPING:
-        if (steppers[i]->isRunning()) {
-          steppers[i]->run();
-        } else {
-          joint_states[i] = JOINT_STATE_HOLD;
-        }
+        steppers[i]->run();
         break;
 
       case JOINT_STATE_MOVE_AUTO:
-        steppers[i]->run();
+        if (!steppers[i]->run()) {
+          joint_states[i] = JOINT_STATE_HOLD;
+        }
         break;
 
       case JOINT_STATE_MOVE_SPEED:
@@ -273,7 +380,7 @@ bool all_joints_stopped()
 }
 
 /**
- * Stop all stepper motors. Bt default, this function takes into account maximum acceleration and
+ * Stop all stepper motors. By default, this function takes into account maximum acceleration and
  * deceleration values, so the motors may not stop immediately. Set the `immediate` parameter to
  * `true` to stop the motors immediately.
  *
@@ -302,6 +409,13 @@ void stop_all(bool immediate = false)
  */
 void send_msg(uint8_t* from, size_t size)
 {
+  // Serial.print("Sending: ");
+  // for (uint8_t i = 0; i < size; ++i) {
+  //   Serial.print(from[i], HEX);
+  //   Serial.print(" ");
+  // }
+  // Serial.println();
+
   uint8_t checksum = crc8ccitt(from, size);
   Serial.write(MSG_START);
   Serial.write(from, size);
@@ -475,6 +589,10 @@ int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
   while (calibrated_count < JOINT_COUNT) {
     run_steppers();
 
+    // Discard any incoming messages
+    while (Serial.read() != -1) {
+    }
+
     for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
       // If the joint has just hit its limit switch, set current position to the reference position
       // and move to the home position.
@@ -492,7 +610,8 @@ int cmd_cal(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
 
       // If the joint has come to a stop at the home position, set the state to HOLD and increment
       // the calibrated count.
-      if (!steppers[i]->isRunning()) {
+      if (steppers[i]->distanceToGo() == 0 && joint_states[i] == JOINT_STATE_MOVE_TO_SPEED) {
+        steppers[i]->setSpeed(0);
         joint_states[i] = JOINT_STATE_HOLD;
         ++calibrated_count;
         continue;
@@ -565,9 +684,6 @@ int cmd_get(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
   if (!robot_state.firmware_matched) {
     return write_err(dest, dest_size, AR3_ERR_INVALID_FIRMWARE, "Robot has not been initialized");
   }
-  if (!robot_state.calibrated) {
-    return write_err(dest, dest_size, AR3_ERR_NOT_CALIBRATED, "Robot is not calibrated");
-  }
   if (args_size != 0) {
     return write_err(dest, dest_size, AR3_ERR_MALFORMED_ARG, "GET command does not take arguments");
   }
@@ -609,7 +725,7 @@ int cmd_mov(uint8_t* dest, size_t dest_size, uint8_t* args, size_t args_size)
   float speeds[JOINT_COUNT];
   for (uint8_t i = 0; i < JOINT_COUNT; ++i) {
     uint16_t position = args[i * 6] | (args[i * 6 + 1] << 8);
-    float speed = *((float*)(args + i * 6 + 2));  // Floats don't care about endianness
+    float speed = *((float*)(args + i * 6 + 2));
 
     // If the position is not being skipped, and it is out of bounds, return an error.
     if (position != SKIP_BYTE &&
