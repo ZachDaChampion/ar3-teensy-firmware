@@ -1,5 +1,13 @@
-#ifndef AR3_TEENSY_FIRMWARE__MESSENGER_HPP
-#define AR3_TEENSY_FIRMWARE__MESSENGER_HPP
+/**
+ * @file framing.hpp
+ * @author Zach Champion (zachchampion79@gmail.com)
+ * 
+ * @version 1.0
+ * @date 2023-08-28
+ */
+
+#ifndef AR3_TEENSY_FIRMWARE__FRAMING_HPP
+#define AR3_TEENSY_FIRMWARE__FRAMING_HPP
 
 #include <stdint.h>
 

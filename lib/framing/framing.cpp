@@ -1,4 +1,12 @@
-#include "messenger.hpp"
+/**
+ * @file framing.cpp
+ * @author Zach Champion (zachchampion79@gmail.com)
+ * 
+ * @version 1.0
+ * @date 2023-08-28
+ */
+
+#include "framing.hpp"
 #include <checksum.hpp>
 #include <cstring>
 
