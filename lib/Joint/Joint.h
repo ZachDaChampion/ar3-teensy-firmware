@@ -88,12 +88,17 @@ public:
   };
 
   /**
-   * Initialize the joint. This should be called in `setup()` and must be called before any other
-   * methods are called.
+   * Construct a new Joint object.
    *
    * @param[in] config The configuration for the joint.
    */
-  void init(JointConfig config);
+  Joint(JointConfig config);
+
+  /**
+   * Initialize the joint. This should be called in `setup()` and must be called before any other
+   * methods are called.
+   */
+  void init();
 
   /**
    * Get the current state of the joint.

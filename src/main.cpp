@@ -1,19 +1,18 @@
 /**
  * @file main.cpp
  * @author Zach Champion (zachchampion79@gmail.com)
- * 
+ *
  * @version 1.0
  * @date 2023-09-01
  */
 
 #include <Arduino.h>
 #include <Joint.h>
-#include <framing.hpp>
 #include <proto/main.h>
-#include <MessageWriter.h>
+#include <Messenger.h>
 
 #define SIZE(x) (sizeof(x) / sizeof(x[0]))
-#define JOINT_COUNT SIZE(joint_configs)
+#define JOINT_COUNT SIZE(joints)
 
 /**
  * A state of the cobot. This is comprised of a state ID and a message ID. The message ID is used to
@@ -36,10 +35,10 @@ struct CobotState {
 };
 
 //                                                                                                //
-// ==================================== Robot configuration ===================================== //
+// ==================================== Joint configuration ===================================== //
 //                                                                                                //
 
-static const JointConfig joint_configs[] = { {
+static Joint joints[] = { Joint({
   .id = 0,
   .name = "base",
 
@@ -68,7 +67,7 @@ static const JointConfig joint_configs[] = { {
 
   .lim_pin = 26,
   .lim_debounce_time = 50,
-} };
+}) };
 
 //                                                                                                //
 // ======================================== Global data ========================================= //
@@ -78,16 +77,9 @@ static const JointConfig joint_configs[] = { {
 static CobotState state = { .id = CobotState::IDLE, .msg_id = 0 };
 bool initialized = false;
 
-// The joints of the cobot.
-static Joint joints[JOINT_COUNT];
-
-// Serial buffers. Size is 258 because the maximum supported payload length is 255, plus 3 bytes
-// for the header.
-static uint8_t serial_in_buffer[258];
-static uint8_t serial_out_buffer[258];
-static size_t serial_in_buffer_len = 0;
-static size_t serial_out_buffer_len = 0;
-OutputWriter serial_out_writer(serial_out_buffer, &serial_out_buffer_len, SIZE(serial_out_buffer));
+// Serial messenger. Size is 258 because the largest message is 255 bytes, plus 3 bytes for the
+// header.
+Messenger<258, 258> messenger;
 
 //                                                                                                //
 // ================================= Arduino control functions ================================== //
@@ -100,7 +92,7 @@ void setup()
 
   // Initialize the joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].init(joint_configs[i]);
+    joints[i].init();
   }
 }
 
@@ -111,34 +103,20 @@ void loop()
     joint.update();
   }
 
-  // Read from serial until the buffer is full or there is no more data to read.
-  if (!Serial.available()) return;
-  while (serial_in_buffer_len < SIZE(serial_in_buffer)) {
-    int x = Serial.read();
-    if (x == -1) break;
-    serial_in_buffer[serial_in_buffer_len++] = x;
-  }
+  messenger.reader.read_from_serial();
 
   // Try parsing a message.
-  int msg_len = check_message(serial_in_buffer, serial_in_buffer_len);
+  int msg_len = messenger.reader.check_message();
   if (msg_len == 0) return;  // Message is incomplete
 
-  // If the message is invalid, send an error log message and shift the buffer.
+  // If the message is invalid, send an error log message and clear the buffer.
   if (msg_len == -1) {
-    static const unsigned long MSG_LEN = 25;
-    auto log_msg = cobot::LogMessage<MSG_LEN>();
-    log_msg.set_level(cobot::LogLevel::ERROR);
-    log_msg.mutable_message() = "Invalid message received";
-
-    auto msg = cobot::CobotMessage<0, 0, 0, 0, 0, MSG_LEN>();
-    msg.set_log(log_msg);
-    uint32_t serialized_size = msg.serialized_size();
-    int w = framed_template(serial_out_buffer, SIZE(serial_out_buffer));
-    serial_out_buffer_len = w;
-
-    // If the error message doesn't fit in the buffer,
-    if (msg.serialize(serial_out_writer) != EmbeddedProto::Error::NO_ERRORS) {
-      exit(1);
-    }
+    messenger.send_log<25>(cobot_proto::LogLevel::ERROR, "Invalid message received");
+    messenger.reader.clear();
+    return;
   }
+
+  // Parse the message as a request.
+  cobot_proto::Request<6, 6, 6> request;
+  request.deserialize(messenger.reader);
 }

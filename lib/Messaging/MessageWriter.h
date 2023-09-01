@@ -31,18 +31,30 @@ public:
   }
 
   /**
+   * Destroy the Message Writer object.
+   */
+  ~MessageWriter() {}
+
+  /**
    * Get a reference to the full buffer.
    *
    * @return A reference to the full buffer.
    */
-  const uint8_t* get_buffer() const override { return this->buffer; }
+  const uint8_t* get_buffer() const { return this->buffer; }
+
+  /**
+   * Get the length of all bytes in the buffer, including the header.
+   *
+   * @return The length of all bytes in the buffer.
+   */
+  uint32_t get_full_buffer_len() const { return this->buffer_len; }
 
   /**
    * Get a reference to the message in the buffer, not including the header.
    *
    * @return A reference to the message in the buffer.
    */
-  const uint8_t* get_message() const override { return &this->buffer[3]; }
+  const uint8_t* get_message() const { return &this->buffer[3]; }
 
   /**
    * Clear the buffer.
@@ -88,6 +100,7 @@ public:
     memcpy(&buffer[this->buffer_len], bytes, length);
     this->buffer[1] += length;
     this->buffer[2] = calc_crc();
+    return true;
   }
 
   /**
@@ -102,12 +115,14 @@ public:
     this->buffer[this->buffer_len] = byte;
     this->buffer[1] += 1;
     this->buffer[2] = calc_crc();
+    return true;
   }
 
 private:
   uint8_t calc_crc() const { return crc8ccitt(&buffer[3], buffer[1]); }
 
   uint8_t buffer[BUFFER_SIZE];
+  size_t buffer_len;
 };
 
 #endif

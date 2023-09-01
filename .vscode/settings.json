@@ -3,6 +3,7 @@
   "files.associations": {
     ".dockerignore": "plaintext",
     "*.tcc": "cpp",
-    "string_view": "cpp"
+    "string_view": "cpp",
+    "array": "cpp"
   }
 }

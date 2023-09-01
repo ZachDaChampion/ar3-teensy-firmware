@@ -14,9 +14,10 @@
 #include <stddef.h>
 #include <checksum.hpp>
 #include <ReadBufferInterface.h>
+#include <Arduino.h>
 
 template <size_t BUFFER_SIZE>
-class MessageReader : EmbeddedProto::ReadBufferInterface
+class MessageReader : public EmbeddedProto::ReadBufferInterface
 {
 public:
   /**
@@ -25,18 +26,47 @@ public:
   MessageReader() {}
 
   /**
+   * Destroy the Message Reader object.
+   */
+  ~MessageReader() {}
+
+  /**
    * Get a reference to the full buffer.
    *
    * @return A reference to the full buffer.
    */
-  const uint8_t* get_buffer() const override { return this->buffer; }
+  const uint8_t* get_buffer() const { return this->buffer; }
+
+  /**
+   * Get the length of all bytes in the buffer, including the header.
+   *
+   * @return The length of all bytes in the buffer.
+   */
+  uint32_t get_full_buffer_len() const { return this->buffer_len; }
+
+  /**
+   * Read bytes from the serial port into the buffer. This will read until the buffer is full or
+   * there are no more bytes to read.
+   */
+  void read_from_serial()
+  {
+    if (!Serial.available()) return;
+    while (this->buffer_len < BUFFER_SIZE) {
+      int x = Serial.read();
+      if (x == -1) break;
+      if (message_in_progress || x == START_BYTE) {
+        message_in_progress = true;
+        this->buffer[this->buffer_len++] = x;
+      }
+    }
+  }
 
   /**
    * Get a reference to the message in the buffer, not including the header.
    *
    * @return A reference to the message in the buffer, or nullptr if there is no message.
    */
-  const uint8_t* get_message() const override
+  const uint8_t* get_message() const
   {
     if (this->buffer_len > 3) {
       return &this->buffer[3];
@@ -49,16 +79,14 @@ public:
    * Check if the message is complete and valid. This will check the start byte, length, and
    * checksum.
    *
-   * @param[in] buffer The buffer containing the framed message.
-   * @param[in] buffer_len The length of the buffer.
    * @return -1 if the message is invalid, 0 if the message is incomplete, or the length of the
    *         message if it is valid.
    */
-  int check_message(const uint8_t* buffer, uint8_t buffer_len)
+  int check_message()
   {
     if (this->buffer_len < 4) return 0;  // Check if header is complete and some message exists
     if (this->buffer[0] != START_BYTE) return -1;          // Check start byte
-    if (this->buffer[1] + 3 < this->buffer_len) return 0;  // Check if message is complete
+    if (this->buffer[1] + 3u < this->buffer_len) return 0;  // Check if message is complete
     if (this->buffer[2] != calc_crc()) return -1;          // Verify checksum
 
     return this->buffer[1];
@@ -67,7 +95,7 @@ public:
   /**
    * Clear the buffer.
    */
-  void clear() override
+  void clear()
   {
     this->buffer_len = 0;
     this->cursor = 0;
@@ -76,11 +104,11 @@ public:
   /**
    * Advance the internal read index by one.
    */
-  void advance() override
+  bool advance() override
   {
-    if (this->cursor < this->buffer_len) {
-      ++this->cursor;
-    }
+    if (this->cursor >= this->buffer_len) return false;
+    this->cursor++;
+    return true;
   }
 
   /**
@@ -88,12 +116,14 @@ public:
    *
    * @param n The number of bytes to advance the read index by.
    */
-  void advance(size_t n) override
+  bool advance(const uint32_t n) override
   {
     if (this->cursor + n < this->buffer_len) {
       this->cursor += n;
+      return true;
     } else {
       this->cursor = this->buffer_len;
+      return false;
     }
   }
 
@@ -102,14 +132,14 @@ public:
    *
    * @return The maximum size of the message, not including the header.
    */
-  size_t get_max_size() const override { return BUFFER_SIZE - 3; }
+  uint32_t get_max_size() const override { return BUFFER_SIZE - 3; }
 
   /**
-   * Get the  totalnumber of bytes in the message, not including the header.
+   * Get the total number of bytes remaining in the message, not including the header.
    *
-   * @return The total number of bytes in the message, not including the header.
+   * @return The total number of bytes remaining in the message, not including the header.
    */
-  size_t get_size() const override { return this->buffer_len - 3; }
+  uint32_t get_size() const override { return this->buffer_len - 3 - this->cursor; }
 
   /**
    * Obtain the value of the oldest byte in the buffer. Does not advance the read index.
@@ -133,7 +163,7 @@ public:
    * @param[out] value The value of the oldest byte in the buffer.
    * @return false if the buffer is empty, true otherwise.
    */
-  bool read(uint8_t& value) override
+  bool pop(uint8_t& value) override
   {
     if (this->cursor < this->buffer_len) {
       value = this->buffer[this->cursor++];
@@ -147,8 +177,9 @@ private:
   uint8_t calc_crc() const { return crc8ccitt(&buffer[3], buffer[1]); }
 
   uint8_t buffer[BUFFER_SIZE];
-  size_t buffer_len = 0;
-  size_t cursor = 0;
+  uint32_t buffer_len = 0;
+  uint32_t cursor = 0;
+  bool message_in_progress = false;
 };
 
 #endif

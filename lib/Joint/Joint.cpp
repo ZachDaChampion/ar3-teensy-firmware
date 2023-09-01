@@ -1,21 +1,23 @@
 #include "Joint.h"
 
-void Joint::init(JointConfig config)
+Joint::Joint(JointConfig config)
+  : config(config)
+  , stepper(AccelStepper::DRIVER, config.step_pin, config.dir_pin)
+  , encoder(config.enc_a_pin, config.enc_b_pin)
+  , limit_switch(config.lim_pin, config.lim_debounce_time)
 {
   this->state.id = State::IDLE;
   this->is_calibrated = false;
   this->micros_timer = 0;
-  this->config = config;
 
   this->enc_deg_per_tick = 360.0 / (config.enc_ticks_per_rev * config.enc_reduction);
   this->motor_deg_per_step = 360.0 / (config.motor_steps_per_rev * config.motor_reduction);
 
-  this->stepper = AccelStepper(AccelStepper::DRIVER, config.step_pin, config.dir_pin);
   this->stepper.setMaxSpeed(config.max_speed);
   this->stepper.setAcceleration(config.max_accel);
-  this->encoder = Encoder(config.enc_a_pin, config.enc_b_pin);
-  this->limit_switch = LimitSwitch(config.lim_pin, config.lim_debounce_time);
 }
+
+void Joint::init() {}
 
 float Joint::get_position()
 {
@@ -29,7 +31,6 @@ float Joint::get_speed()
 
 void Joint::move_to_auto(float target)
 {
-  if (!is_calibrated) throw "Joint not calibrated";  // TODO: better error handling
   state.id = State::MOVE_TO_AUTO;
   state.data.move_to_auto.target_steps = target / motor_deg_per_step;
   stepper.moveTo(state.data.move_to_auto.target_steps);
@@ -37,7 +38,6 @@ void Joint::move_to_auto(float target)
 
 void Joint::move_to_speed(float target, float speed)
 {
-  if (!is_calibrated) throw "Joint not calibrated";  // TODO: better error handling
   state.id = State::MOVE_TO_SPEED;
   state.data.move_to_speed.target_steps = target / motor_deg_per_step;
   state.data.move_to_speed.speed = speed / motor_deg_per_step;
@@ -47,7 +47,6 @@ void Joint::move_to_speed(float target, float speed)
 
 void Joint::move_forever_speed(float speed)
 {
-  if (!is_calibrated) throw "Joint not calibrated";  // TODO: better error handling
   state.id = State::MOVE_FOREVER_SPEED;
   state.data.move_forever_speed.speed = speed / motor_deg_per_step;
   stepper.setSpeed(state.data.move_forever_speed.speed);
@@ -107,6 +106,10 @@ void Joint::update()
         stepper.setSpeed(0);
       }
       stepper.run();
+      break;
+
+    case State::MOVE_FOREVER_SPEED:
+      stepper.runSpeed();
       break;
   }
 
