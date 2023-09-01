@@ -23,10 +23,12 @@ struct JointConfig {
   long ref_steps;  // Position of the joint when it touches the limit switch (in steps)
 
   int motor_steps_per_rev;  // Number of steps per revolution of the stepper motor
-  int enc_ticks_per_rev;    // Number of steps per revolution of the motor
+  int enc_ticks_per_rev;    // Number of ticks per revolution of the encoder
 
   float motor_reduction;  // Gear reduction from the motor to the joint
   float enc_reduction;    // Gear reduction from the encoder to the joint
+
+  int8_t direction;  // 1 if the joint is not reversed, -1 if it is reversed
 
   float max_speed;  // Maximum speed of the joint (in degrees per second)
   float max_accel;  // Maximum acceleration of the joint (in degrees per second per second)
@@ -41,10 +43,10 @@ struct JointConfig {
   uint8_t enc_a_pin;  // Encoder A pin
   uint8_t enc_b_pin;  // Encoder B pin
 
+  float speed_filter_strength;  // Strength of the speed filter (percent of new speed per second)
+
   uint8_t lim_pin;             // Limit switch pin
   uint16_t lim_debounce_time;  // Debounce time for the limit switch
-
-  int8_t direction;  // 1 if the joint is not reversed, -1 if it is reversed
 };
 
 /**
@@ -58,16 +60,15 @@ public:
    * A state that the joint can be in.
    */
   struct State {
-    enum StateID {
+    // The ID of the state.
+    enum {
       IDLE,           // The joint is not moving
       STOPPING,       // The joint is stopping
       CALIBRATING,    // The joint is calibrating
       MOVE_TO_AUTO,   // The joint is moving to a position with an automatically calculated speed
       MOVE_TO_SPEED,  // The joint is moving to a position with a specified speed
       MOVE_FOREVER_SPEED,  // The joint is moving indefinitely at a specified speed
-    };
-
-    StateID id;  // The ID of the state
+    } id;
 
     // Data dependent on the state.
     union {
@@ -166,7 +167,8 @@ private:
   JointConfig config;
   bool is_calibrated;
   float measured_speed;
-  uint64_t last_update_time;
+  int32_t last_encoder_pos;
+  elapsedMicros micros_timer;
 };
 
 #endif
