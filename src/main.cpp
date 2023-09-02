@@ -8,8 +8,9 @@
 
 #include <Arduino.h>
 #include <Joint.h>
-#include <proto/main.h>
-#include <Messenger.h>
+#include <MsgPack.h>
+#include <messaging.h>
+#include <framing.h>
 
 #define SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define JOINT_COUNT SIZE(joints)
@@ -77,9 +78,18 @@ static Joint joints[] = { Joint({
 static CobotState state = { .id = CobotState::IDLE, .msg_id = 0 };
 bool initialized = false;
 
-// Serial messenger. Size is 258 because the largest message is 255 bytes, plus 3 bytes for the
-// header.
-Messenger<258, 258> messenger;
+// Message pack objects.
+MsgPack::Packer packer;
+MsgPack::Unpacker unpacker;
+
+// Serial buffers.
+static const size_t SERIAL_BUFFER_SIZE = 258;  // 255 bytes + 3 bytes for the header
+static uint8_t serial_buffer_in[SERIAL_BUFFER_SIZE];
+static uint8_t serial_buffer_out[SERIAL_BUFFER_SIZE];
+static size_t serial_buffer_in_len = 0;
+static size_t serial_buffer_out_len = 0;
+
+bool message_in_progress = false;
 
 //                                                                                                //
 // ================================= Arduino control functions ================================== //
@@ -103,17 +113,24 @@ void loop()
     joint.update();
   }
 
-  messenger.reader.read_from_serial();
+  // Read from the serial port until the buffer is full or there are no more bytes to read.
+  if (!Serial.available()) return;
+  while (serial_buffer_in_len < SERIAL_BUFFER_SIZE) {
+    int x = Serial.read();
+    if (x == -1) break;
+    if (message_in_progress || x == START_BYTE) {
+      message_in_progress = true;
+      serial_buffer_in[serial_buffer_in_len++] = x;
+    }
+  }
 
   // Try parsing a message.
-  int msg_len = messenger.reader.check_message();
+  int msg_len = check_message(serial_buffer_in, serial_buffer_in_len);
   if (msg_len == 0) return;  // Message is incomplete
 
   // If the message is invalid, send an error log message and clear the buffer.
   if (msg_len == -1) {
-    messenger.send_log<25>(cobot_proto::LogLevel::ERROR, "Invalid message received");
-    messenger.reader.clear();
-    return;
+    
   }
 
   // Parse the message as a request.

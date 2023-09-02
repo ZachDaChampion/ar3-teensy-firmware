@@ -1,3 +1,3 @@
-[submodule "embeddedproto"]
-	path = embeddedproto
-	url = git@github.com:Embedded-AMS/EmbeddedProto.git
+[submodule "messages"]
+	path = messages
+	url = git@github.com:COBOT-Team/firmware-messages.git
