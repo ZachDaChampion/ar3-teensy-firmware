@@ -10,6 +10,7 @@
 #define AR3_TEENSY_FIRMWARE__FRAMING_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define START_BYTE 0x24
 
@@ -26,7 +27,7 @@ namespace framing
  * @param[in] src_len The length of the source buffer.
  * @return The length of the framed message, or -1 if the message is too long to fit in the buffer.
  */
-int frame_message(uint8_t* dest, size_t dest_len, const uint8_t* src, size_t src_len);
+int frame_message(uint8_t* dest, size_t dest_len, const uint8_t* src, uint8_t src_len);
 
 /**
  * Check if a framed message is complete and valid. This will check the start byte, length, and

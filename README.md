@@ -2,15 +2,11 @@
 
 Firmware for a Teensy microcontroller to control the Annin Robotics AR3
 
-## TODO
-
-- Send error when interrupting a move
-
 # Flatbuffers
 
-The firmware uses [Flatbuffers](https://google.github.io/flatbuffers/) to communicate with the
-host computer. The Flatbuffers schema is defined in the `messages` folder, which is a submodule
-pointing to the [firmware-messages](https://github.com/COBOT-Team/firmware-messages) repository.
+The firmware uses [Flatbuffers](https://google.github.io/flatbuffers/) to communicate with the host
+computer. The Flatbuffers schema is defined in the `messages` folder, which is a submodule pointing
+to the [firmware-messages](https://github.com/COBOT-Team/firmware-messages) repository.
 
 # PlatformIO
 

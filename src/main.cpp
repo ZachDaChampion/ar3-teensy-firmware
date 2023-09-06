@@ -10,7 +10,7 @@
 #include <Joint.h>
 #include <main_generated.h>
 #include <framing.h>
-#include "message-helper.h"
+#include <Messenger.h>
 
 #define SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define JOINT_COUNT SIZE(joints)
@@ -83,19 +83,19 @@ static Joint joints[] = { Joint({
 // The current state of the cobot.
 static CobotState state = { .id = CobotState::IDLE, .msg_id = 0 };
 bool initialized = false;
-CobotMsgs::LogLevel log_level = CobotMsgs::LogLevel_INFO;
+bool message_in_progress = false;
 
 // Flatbuffers builder.
 static flatbuffers::FlatBufferBuilder builder(1024);
 
 // Serial buffers.
-static const size_t SERIAL_BUFFER_SIZE = 258;  // 255 bytes + 3 bytes for the header
+static const size_t SERIAL_BUFFER_SIZE = 1024;
 static uint8_t serial_buffer_in[SERIAL_BUFFER_SIZE];
 static uint8_t serial_buffer_out[SERIAL_BUFFER_SIZE];
 static size_t serial_buffer_in_len = 0;
-static size_t serial_buffer_out_len = 0;
 
-bool message_in_progress = false;
+// The messenger.
+Messenger<SERIAL_BUFFER_SIZE> messenger(&builder);
 
 //                                                                                                //
 // ====================================== Request handlers ====================================== //
@@ -109,16 +109,14 @@ bool message_in_progress = false;
  * @return  The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *          small.
  */
-int handle_init(uint32_t request_id, const CobotMsgs::Request::Init* data)
+void handle_init(uint32_t request_id, const CobotMsgs::Request::Init* data)
 {
   if (data->expected_fw_version() == FW_VERSION) {
     initialized = true;
-    return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+    return messenger.send_ack(request_id);
   } else {
-    return msg_helper::write_error_response(
-      serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id,
-      CobotMsgs::ErrorCode_INVALID_FIRMWARE_VERSION,
-      "COBOT is running firmware version " FW_VERSION_STR ".");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_FIRMWARE_VERSION,
+                                         "COBOT is running firmware version " FW_VERSION_STR ".");
   }
 }
 
@@ -130,22 +128,27 @@ int handle_init(uint32_t request_id, const CobotMsgs::Request::Init* data)
  * @return  The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *          small.
  */
-int handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* data)
+void handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* data)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
   uint8_t joints_bf = data->joints_bitfield();
 
   // Verify that no joints are set that don't exist.
   if (joints_bf >> JOINT_COUNT) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
-                                            "The joints bitfield contains bits that don't "
-                                            "correspond to any joints.");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
+                                         "The joints bitfield contains bits that don't "
+                                         "correspond to any joints.");
   }
 
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by calibration");
+  }
+
+  // Stop all joints and calibrate the specified joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].stop(false);
     if (joints_bf & (1 << i)) {
@@ -153,9 +156,10 @@ int handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* d
     }
   }
 
+  // Set the state to CALIBRATING and respond to the request with an ACK.
   state.id = CobotState::CALIBRATING;
   state.msg_id = request_id;
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+  messenger.send_ack(request_id);
 }
 
 /**
@@ -166,52 +170,67 @@ int handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* d
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_override(uint32_t request_id, const CobotMsgs::Request::Override* data)
+void handle_override(uint32_t request_id, const CobotMsgs::Request::Override* data)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
   auto entries = data->entries();
   auto entry_count = entries->size();
 
-  // Stop all joints and verify that all specified joints exist and that the override angles are
-  // within the joint limits. This will create a list of new joint positions that will be applied
-  // after all joints have been verified.
+  // Create a map from joint index to entry index. Any joint that does not have an entry will be
+  // mapped to -1. This will also count the number of entries that were found so that we can verify
+  // that all joints were found.
   uint8_t found = 0;
-  float new_positions[JOINT_COUNT];
+  int8_t map[JOINT_COUNT];
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
-    new_positions[i] = joints[i].get_position();
-
+    map[i] = -1;
     for (size_t j = 0; j < entry_count; ++j) {
       auto entry = entries->Get(j);
-
       if (entry->joint_id() == i) {
-        if (!joints[i].position_within_range(entry->angle())) {
-          return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                                  request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
-                                                  "Some joints are out of range.");
-        }
-
-        new_positions[i] = entry->angle();
         ++found;
+        map[i] = j;
         break;
       }
     }
   }
 
   // Verify that all specified joints were found.
-  if (found != entry_count) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
-                                            "Some joints were not found.");
+  if (found < entry_count) {
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
+                                         "Some joints were not found.");
   }
 
-  for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].override_position(new_positions[i]);
+  // Ensure that all override angles are within the joint limits.
+  for (size_t i = 0; i < entry_count; ++i) {
+    auto entry = entries->Get(map[i]);
+    if (!joints[i].position_within_range(entry->angle())) {
+      return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                           "Some joints are out of range.");
+    }
   }
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by override");
+  }
+
+  // Stop all joints.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    joints[i].stop(false);
+  }
+
+  // Override the positions of all specified joints.
+  for (size_t i = 0; i < entry_count; ++i) {
+    auto entry = entries->Get(map[i]);
+    joints[i].override_position(entry->angle());
+  }
+
+  // Set the state to IDLE and respond to the request with an ACK.
+  state.id = CobotState::IDLE;
+  state.msg_id = request_id;
+  messenger.send_ack(request_id);
 }
 
 /**
@@ -221,11 +240,10 @@ int handle_override(uint32_t request_id, const CobotMsgs::Request::Override* dat
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_get_joints(uint32_t request_id)
+void handle_get_joints(uint32_t request_id)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
 
   // Create an array of joint entries. This must be done in a manually allocated buffer because
@@ -249,8 +267,10 @@ int handle_get_joints(uint32_t request_id)
     builder, CobotMsgs::OutgoingMessagePayload_Response, response.Union());
   builder.Finish(outgoing_msg);
 
-  return framing::frame_message(serial_buffer_out, SERIAL_BUFFER_SIZE, builder.GetBufferPointer(),
-                                builder.GetSize());
+  // Send the outgoing message.
+  int written = framing::frame_message(serial_buffer_out, SERIAL_BUFFER_SIZE,
+                                       builder.GetBufferPointer(), builder.GetSize());
+  if (written > 0) Serial.write(serial_buffer_out, written);
 }
 
 /**
@@ -261,11 +281,10 @@ int handle_get_joints(uint32_t request_id)
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
+void handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
   auto entries = data->entries();
 
@@ -288,9 +307,8 @@ int handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
 
   // Verify that all specified joints were found.
   if (found < entries->size()) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
-                                            "Some joints were not found.");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
+                                         "Some joints were not found.");
   }
 
   // Ensure that all new positions are within the joint and speed limits. Speeds must be
@@ -299,20 +317,23 @@ int handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
     if (map[i] == -1) continue;
     auto entry = entries->Get(map[i]);
     if (!joints[i].position_within_range(entry->angle())) {
-      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
-                                              "Some joint positions are out of range.");
+      return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                           "Some joint positions are out of range.");
     }
     if (entry->speed() < 0) {
-      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
-                                              "Some joint speeds are negative.");
+      return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                           "Some joint speeds are negative.");
     }
     if (!joints[i].speed_within_range(entry->speed())) {
-      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
-                                              "Some joint speeds are out of range.");
+      return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                           "Some joint speeds are out of range.");
     }
+  }
+
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by move");
   }
 
   // Stop all joints immediately.
@@ -333,9 +354,10 @@ int handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
     }
   }
 
+  // Set the state to MOVE_TO and respond to the request with an ACK.
   state.id = CobotState::MOVE_TO;
   state.msg_id = request_id;
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+  messenger.send_ack(request_id);
 }
 
 /**
@@ -346,11 +368,10 @@ int handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* data)
+void handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* data)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
   auto entries = data->entries();
 
@@ -373,9 +394,8 @@ int handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* 
 
   // Verify that all specified joints were found.
   if (found < entries->size()) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
-                                            "Some joints were not found.");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
+                                         "Some joints were not found.");
   }
 
   // Ensure that all speeds are within the joint limits. Speeds may be negative to indicate
@@ -384,10 +404,15 @@ int handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* 
     if (map[i] == -1) continue;
     auto entry = entries->Get(map[i]);
     if (!joints[i].speed_within_range(entry->speed())) {
-      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
-                                              "Some joint speeds are out of range.");
+      return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                           "Some joint speeds are out of range.");
     }
+  }
+
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by move");
   }
 
   // Stop all joints immediately.
@@ -405,9 +430,10 @@ int handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* 
     }
   }
 
+  // Set the state to MOVE_SPEED and respond to the request with an ACK.
   state.id = CobotState::MOVE_SPEED;
   state.msg_id = request_id;
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+  messenger.send_ack(request_id);
 }
 
 /**
@@ -418,21 +444,25 @@ int handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* 
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_stop(uint32_t request_id, const CobotMsgs::Request::Stop* data)
+void handle_stop(uint32_t request_id, const CobotMsgs::Request::Stop* data)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
   auto immediate = data->immediate();
   auto joints_bf = data->joints_bitfield();
 
   // Verify that no joints are set that don't exist.
   if (joints_bf >> JOINT_COUNT) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
-                                            "The joints bitfield contains bits that don't "
-                                            "correspond to any joints.");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
+                                         "The joints bitfield contains bits that don't "
+                                         "correspond to any joints.");
+  }
+
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by stop");
   }
 
   // Stop all specified joints. This will stop them smoothly only if immediate is false AND the
@@ -443,10 +473,10 @@ int handle_stop(uint32_t request_id, const CobotMsgs::Request::Stop* data)
     }
   }
 
+  // Set the state to STOPPING and respond to the request with an ACK.
   state.id = CobotState::STOPPING;
   state.msg_id = request_id;
-
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+  messenger.send_ack(request_id);
 }
 
 /**
@@ -457,20 +487,24 @@ int handle_stop(uint32_t request_id, const CobotMsgs::Request::Stop* data)
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_go_home(uint32_t request_id, const CobotMsgs::Request::GoHome* data)
+void handle_go_home(uint32_t request_id, const CobotMsgs::Request::GoHome* data)
 {
   if (!initialized) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_NOT_INITIALIZED, "");
   }
   auto joints_bf = data->joints_bitfield();
 
   // Verify that no joints are set that don't exist.
   if (joints_bf >> JOINT_COUNT) {
-    return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                            request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
-                                            "The joints bitfield contains bits that don't "
-                                            "correspond to any joints.");
+    return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
+                                         "The joints bitfield contains bits that don't "
+                                         "correspond to any joints.");
+  }
+
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by go home");
   }
 
   // Stop all joints and move the specified joints to their home positions.
@@ -483,7 +517,7 @@ int handle_go_home(uint32_t request_id, const CobotMsgs::Request::GoHome* data)
 
   state.id = CobotState::MOVE_TO;
   state.msg_id = request_id;
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+  return messenger.send_ack(request_id);
 }
 
 /**
@@ -493,14 +527,19 @@ int handle_go_home(uint32_t request_id, const CobotMsgs::Request::GoHome* data)
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_reset(uint32_t request_id)
+void handle_reset(uint32_t request_id)
 {
+  if (state.id != CobotState::IDLE) {
+    messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_CANCELLED,
+                                  "Interrupted by reset");
+  }
+
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].reset();
   }
   state.id = CobotState::IDLE;
   state.msg_id = 0;
-  return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+  return messenger.send_ack(request_id);
 }
 
 /**
@@ -511,7 +550,7 @@ int handle_reset(uint32_t request_id)
  * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
  *         small.
  */
-int handle_set_log_level(uint32_t request_id, const CobotMsgs::Request::SetLogLevel* data)
+void handle_set_log_level(uint32_t request_id, const CobotMsgs::Request::SetLogLevel* data)
 {
   auto new_log_level = data->log_level();
   switch (new_log_level) {
@@ -519,12 +558,11 @@ int handle_set_log_level(uint32_t request_id, const CobotMsgs::Request::SetLogLe
     case CobotMsgs::LogLevel_INFO:
     case CobotMsgs::LogLevel_WARN:
     case CobotMsgs::LogLevel_ERROR:
-      log_level = new_log_level;
-      return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
+      messenger.log_level = new_log_level;
+      return messenger.send_ack(request_id);
     default:
-      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                              request_id, CobotMsgs::ErrorCode_MALFORMED_REQUEST,
-                                              "Invalid log level.");
+      return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_MALFORMED_REQUEST,
+                                           "Invalid log level.");
   }
 }
 
@@ -570,14 +608,7 @@ void loop()
         }
       }
       if (all_stopped) {
-        int written =
-          msg_helper::write_done(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, state.msg_id);
-        if (written > 0) {
-          serial_buffer_out_len += written;
-          Serial.write(serial_buffer_out, serial_buffer_out_len);
-          Serial.flush();
-        }
-        serial_buffer_out_len = 0;
+        messenger.send_done(state.msg_id);
         state.id = CobotState::IDLE;
         state.msg_id = 0;
         return;  // Return so that joints get updated again.
@@ -603,18 +634,7 @@ void loop()
 
   // If the message is invalid, send an error log message and  discard it.
   if (msg_len == -1) {
-    int written = msg_helper::write_log(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                        CobotMsgs::LogLevel_ERROR, "Invalid message received.");
-
-    // Only send the message if it fits in the buffer. Otherwise, ignore it.
-    // TODO: Handle this better.
-    if (written > 0) {
-      serial_buffer_out_len += written;
-      Serial.write(serial_buffer_out, serial_buffer_out_len);
-      Serial.flush();
-    }
-    serial_buffer_out_len = 0;
-
+    messenger.log(CobotMsgs::LogLevel_ERROR, "Invalid message received.");
     serial_buffer_in_len = framing::remove_bad_frame(serial_buffer_in, serial_buffer_in_len);
     return;
   }
@@ -629,61 +649,42 @@ void loop()
   auto request_type = request->payload_type();
   auto request_id = request->message_id();
 
-  // Handle the request and get the number of bytes written to the serial buffer.
-  int written;
+  // Handle the request.
   switch (request_type) {
     case CobotMsgs::Request::RequestPayload_Init:
-      written = handle_init(request_id, request->payload_as_Init());
+      handle_init(request_id, request->payload_as_Init());
       break;
     case CobotMsgs::Request::RequestPayload_Calibrate:
-      written = handle_calibrate(request_id, request->payload_as_Calibrate());
+      handle_calibrate(request_id, request->payload_as_Calibrate());
       break;
     case CobotMsgs::Request::RequestPayload_Override:
-      written = handle_override(request_id, request->payload_as_Override());
+      handle_override(request_id, request->payload_as_Override());
       break;
     case CobotMsgs::Request::RequestPayload_GetJoints:
-      written = handle_get_joints(request_id);
+      handle_get_joints(request_id);
       break;
     case CobotMsgs::Request::RequestPayload_MoveTo:
-      written = handle_move_to(request_id, request->payload_as_MoveTo());
+      handle_move_to(request_id, request->payload_as_MoveTo());
       break;
     case CobotMsgs::Request::RequestPayload_MoveSpeed:
-      written = handle_move_speed(request_id, request->payload_as_MoveSpeed());
+      handle_move_speed(request_id, request->payload_as_MoveSpeed());
       break;
     case CobotMsgs::Request::RequestPayload_Stop:
-      written = handle_stop(request_id, request->payload_as_Stop());
+      handle_stop(request_id, request->payload_as_Stop());
       break;
     case CobotMsgs::Request::RequestPayload_GoHome:
-      written = handle_go_home(request_id, request->payload_as_GoHome());
+      handle_go_home(request_id, request->payload_as_GoHome());
       break;
     case CobotMsgs::Request::RequestPayload_Reset:
-      written = handle_reset(request_id);
+      handle_reset(request_id);
       break;
     case CobotMsgs::Request::RequestPayload_SetLogLevel:
-      written = handle_set_log_level(request_id, request->payload_as_SetLogLevel());
+      handle_set_log_level(request_id, request->payload_as_SetLogLevel());
       break;
 
     default:
-      written = msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                                 request_id, CobotMsgs::ErrorCode_MALFORMED_REQUEST,
-                                                 "Unknown request type.");
+      messenger.send_error_response(request_id, CobotMsgs::ErrorCode_MALFORMED_REQUEST,
+                                    "Unknown request type.");
       break;
   }
-
-  // Send the response if it fits in the buffer. Otherwise, log an error.
-  if (written > 0) {
-    serial_buffer_out_len += written;
-    Serial.write(serial_buffer_out, serial_buffer_out_len);
-    Serial.flush();
-  } else {
-    int written =
-      msg_helper::write_log(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                            CobotMsgs::LogLevel_ERROR, "Serial buffer too small to send response.");
-    if (written > 0) {
-      serial_buffer_out_len += written;
-      Serial.write(serial_buffer_out, serial_buffer_out_len);
-      Serial.flush();
-    }
-  }
-  serial_buffer_out_len = 0;
 }

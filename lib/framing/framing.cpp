@@ -29,7 +29,7 @@ int check_message(const uint8_t* buffer, size_t buffer_len)
   if (buffer[0] != START_BYTE) return -1;
 
   uint8_t msg_len = buffer[1];
-  if (buffer_len < msg_len + 3) return 0;
+  if (buffer_len < msg_len + 3u) return 0;
 
   uint8_t crc = crc8ccitt(buffer + 3, msg_len);
   if (crc != buffer[2]) return -1;
