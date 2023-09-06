@@ -38,6 +38,13 @@ void Joint::move_to_auto(float target)
 {
   state.id = State::MOVE_TO_AUTO;
   state.data.move_to_auto.target_steps = target / motor_deg_per_step;
+
+  // Limit the target position to the range of the joint.
+  if (state.data.move_to_auto.target_steps < config.min_steps)
+    state.data.move_to_auto.target_steps = config.min_steps;
+  if (state.data.move_to_auto.target_steps > config.max_steps)
+    state.data.move_to_auto.target_steps = config.max_steps;
+
   stepper.moveTo(state.data.move_to_auto.target_steps);
 }
 
@@ -46,6 +53,18 @@ void Joint::move_to_speed(float target, float speed)
   state.id = State::MOVE_TO_SPEED;
   state.data.move_to_speed.target_steps = target / motor_deg_per_step;
   state.data.move_to_speed.speed = speed / motor_deg_per_step;
+
+  // Limit the target position to the range of the joint.
+  if (state.data.move_to_speed.target_steps < config.min_steps)
+    state.data.move_to_speed.target_steps = config.min_steps;
+  if (state.data.move_to_speed.target_steps > config.max_steps)
+    state.data.move_to_speed.target_steps = config.max_steps;
+
+  // Limit the speed to between 0 and the maximum speed of the joint.
+  if (state.data.move_to_speed.speed < 0) state.data.move_to_speed.speed = 0;
+  if (state.data.move_to_speed.speed > config.max_speed)
+    state.data.move_to_speed.speed = config.max_speed;
+
   stepper.moveTo(state.data.move_to_speed.target_steps);
   stepper.setSpeed(state.data.move_to_speed.speed);
 }
@@ -54,6 +73,13 @@ void Joint::move_forever_speed(float speed)
 {
   state.id = State::MOVE_FOREVER_SPEED;
   state.data.move_forever_speed.speed = speed / motor_deg_per_step;
+
+  // Limit the speed to between -max_speed and max_speed.
+  if (state.data.move_forever_speed.speed < -config.max_speed)
+    state.data.move_forever_speed.speed = -config.max_speed;
+  if (state.data.move_forever_speed.speed > config.max_speed)
+    state.data.move_forever_speed.speed = config.max_speed;
+
   stepper.setSpeed(state.data.move_forever_speed.speed);
 }
 
@@ -117,9 +143,10 @@ void Joint::update()
       break;
 
     case State::STOPPING:
-      if (stepper.distanceToGo() == 0) {
+      if (!stepper.isRunning()) {
         state.id = State::IDLE;
         stepper.setSpeed(0);
+        break;
       }
       stepper.run();
       break;
@@ -131,12 +158,14 @@ void Joint::update()
         state.id = State::IDLE;
         stepper.setSpeed(0);
       }
+      stepper.runSpeed();
       break;
 
     case State::MOVE_TO_AUTO:
-      if (stepper.distanceToGo() == 0) {
+      if (!stepper.isRunning()) {
         state.id = State::IDLE;
         stepper.setSpeed(0);
+        break;
       }
       stepper.run();
       break;
@@ -146,10 +175,15 @@ void Joint::update()
         state.id = State::IDLE;
         stepper.setSpeed(0);
       }
-      stepper.run();
+      stepper.runSpeedToPosition();
       break;
 
     case State::MOVE_FOREVER_SPEED:
+      if (stepper.currentPosition() <= config.min_steps ||
+          stepper.currentPosition() >= config.max_steps) {
+        state.id = State::IDLE;
+        stepper.setSpeed(0);
+      }
       stepper.runSpeed();
       break;
   }
