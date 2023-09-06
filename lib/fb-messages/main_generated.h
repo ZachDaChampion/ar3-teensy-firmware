@@ -20,29 +20,32 @@ static_assert(FLATBUFFERS_VERSION_MAJOR == 23 &&
 
 namespace CobotMsgs {
 
-enum CobotMessage : uint8_t {
-  CobotMessage_NONE = 0,
-  CobotMessage_Request = 1,
-  CobotMessage_Response = 2,
-  CobotMessage_LogMessage = 3,
-  CobotMessage_MIN = CobotMessage_NONE,
-  CobotMessage_MAX = CobotMessage_LogMessage
+struct OutgoingMessage;
+struct OutgoingMessageBuilder;
+
+struct IncomingMessage;
+struct IncomingMessageBuilder;
+
+enum OutgoingMessagePayload : uint8_t {
+  OutgoingMessagePayload_NONE = 0,
+  OutgoingMessagePayload_Response = 1,
+  OutgoingMessagePayload_LogMessage = 2,
+  OutgoingMessagePayload_MIN = OutgoingMessagePayload_NONE,
+  OutgoingMessagePayload_MAX = OutgoingMessagePayload_LogMessage
 };
 
-inline const CobotMessage (&EnumValuesCobotMessage())[4] {
-  static const CobotMessage values[] = {
-    CobotMessage_NONE,
-    CobotMessage_Request,
-    CobotMessage_Response,
-    CobotMessage_LogMessage
+inline const OutgoingMessagePayload (&EnumValuesOutgoingMessagePayload())[3] {
+  static const OutgoingMessagePayload values[] = {
+    OutgoingMessagePayload_NONE,
+    OutgoingMessagePayload_Response,
+    OutgoingMessagePayload_LogMessage
   };
   return values;
 }
 
-inline const char * const *EnumNamesCobotMessage() {
-  static const char * const names[5] = {
+inline const char * const *EnumNamesOutgoingMessagePayload() {
+  static const char * const names[4] = {
     "NONE",
-    "Request",
     "Response",
     "LogMessage",
     nullptr
@@ -50,45 +53,146 @@ inline const char * const *EnumNamesCobotMessage() {
   return names;
 }
 
-inline const char *EnumNameCobotMessage(CobotMessage e) {
-  if (::flatbuffers::IsOutRange(e, CobotMessage_NONE, CobotMessage_LogMessage)) return "";
+inline const char *EnumNameOutgoingMessagePayload(OutgoingMessagePayload e) {
+  if (::flatbuffers::IsOutRange(e, OutgoingMessagePayload_NONE, OutgoingMessagePayload_LogMessage)) return "";
   const size_t index = static_cast<size_t>(e);
-  return EnumNamesCobotMessage()[index];
+  return EnumNamesOutgoingMessagePayload()[index];
 }
 
-template<typename T> struct CobotMessageTraits {
-  static const CobotMessage enum_value = CobotMessage_NONE;
+template<typename T> struct OutgoingMessagePayloadTraits {
+  static const OutgoingMessagePayload enum_value = OutgoingMessagePayload_NONE;
 };
 
-template<> struct CobotMessageTraits<CobotMsgs::Request::Request> {
-  static const CobotMessage enum_value = CobotMessage_Request;
+template<> struct OutgoingMessagePayloadTraits<CobotMsgs::Response::Response> {
+  static const OutgoingMessagePayload enum_value = OutgoingMessagePayload_Response;
 };
 
-template<> struct CobotMessageTraits<CobotMsgs::Response::Response> {
-  static const CobotMessage enum_value = CobotMessage_Response;
+template<> struct OutgoingMessagePayloadTraits<CobotMsgs::LogMessage> {
+  static const OutgoingMessagePayload enum_value = OutgoingMessagePayload_LogMessage;
 };
 
-template<> struct CobotMessageTraits<CobotMsgs::LogMessage> {
-  static const CobotMessage enum_value = CobotMessage_LogMessage;
+bool VerifyOutgoingMessagePayload(::flatbuffers::Verifier &verifier, const void *obj, OutgoingMessagePayload type);
+bool VerifyOutgoingMessagePayloadVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
+
+struct OutgoingMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef OutgoingMessageBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_PAYLOAD_TYPE = 4,
+    VT_PAYLOAD = 6
+  };
+  CobotMsgs::OutgoingMessagePayload payload_type() const {
+    return static_cast<CobotMsgs::OutgoingMessagePayload>(GetField<uint8_t>(VT_PAYLOAD_TYPE, 0));
+  }
+  const void *payload() const {
+    return GetPointer<const void *>(VT_PAYLOAD);
+  }
+  template<typename T> const T *payload_as() const;
+  const CobotMsgs::Response::Response *payload_as_Response() const {
+    return payload_type() == CobotMsgs::OutgoingMessagePayload_Response ? static_cast<const CobotMsgs::Response::Response *>(payload()) : nullptr;
+  }
+  const CobotMsgs::LogMessage *payload_as_LogMessage() const {
+    return payload_type() == CobotMsgs::OutgoingMessagePayload_LogMessage ? static_cast<const CobotMsgs::LogMessage *>(payload()) : nullptr;
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_PAYLOAD_TYPE, 1) &&
+           VerifyOffset(verifier, VT_PAYLOAD) &&
+           VerifyOutgoingMessagePayload(verifier, payload(), payload_type()) &&
+           verifier.EndTable();
+  }
 };
 
-bool VerifyCobotMessage(::flatbuffers::Verifier &verifier, const void *obj, CobotMessage type);
-bool VerifyCobotMessageVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
+template<> inline const CobotMsgs::Response::Response *OutgoingMessage::payload_as<CobotMsgs::Response::Response>() const {
+  return payload_as_Response();
+}
 
-inline bool VerifyCobotMessage(::flatbuffers::Verifier &verifier, const void *obj, CobotMessage type) {
+template<> inline const CobotMsgs::LogMessage *OutgoingMessage::payload_as<CobotMsgs::LogMessage>() const {
+  return payload_as_LogMessage();
+}
+
+struct OutgoingMessageBuilder {
+  typedef OutgoingMessage Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_payload_type(CobotMsgs::OutgoingMessagePayload payload_type) {
+    fbb_.AddElement<uint8_t>(OutgoingMessage::VT_PAYLOAD_TYPE, static_cast<uint8_t>(payload_type), 0);
+  }
+  void add_payload(::flatbuffers::Offset<void> payload) {
+    fbb_.AddOffset(OutgoingMessage::VT_PAYLOAD, payload);
+  }
+  explicit OutgoingMessageBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<OutgoingMessage> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<OutgoingMessage>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<OutgoingMessage> CreateOutgoingMessage(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    CobotMsgs::OutgoingMessagePayload payload_type = CobotMsgs::OutgoingMessagePayload_NONE,
+    ::flatbuffers::Offset<void> payload = 0) {
+  OutgoingMessageBuilder builder_(_fbb);
+  builder_.add_payload(payload);
+  builder_.add_payload_type(payload_type);
+  return builder_.Finish();
+}
+
+struct IncomingMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef IncomingMessageBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_PAYLOAD = 4
+  };
+  const CobotMsgs::Request::Request *payload() const {
+    return GetPointer<const CobotMsgs::Request::Request *>(VT_PAYLOAD);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_PAYLOAD) &&
+           verifier.VerifyTable(payload()) &&
+           verifier.EndTable();
+  }
+};
+
+struct IncomingMessageBuilder {
+  typedef IncomingMessage Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_payload(::flatbuffers::Offset<CobotMsgs::Request::Request> payload) {
+    fbb_.AddOffset(IncomingMessage::VT_PAYLOAD, payload);
+  }
+  explicit IncomingMessageBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<IncomingMessage> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<IncomingMessage>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<IncomingMessage> CreateIncomingMessage(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<CobotMsgs::Request::Request> payload = 0) {
+  IncomingMessageBuilder builder_(_fbb);
+  builder_.add_payload(payload);
+  return builder_.Finish();
+}
+
+inline bool VerifyOutgoingMessagePayload(::flatbuffers::Verifier &verifier, const void *obj, OutgoingMessagePayload type) {
   switch (type) {
-    case CobotMessage_NONE: {
+    case OutgoingMessagePayload_NONE: {
       return true;
     }
-    case CobotMessage_Request: {
-      auto ptr = reinterpret_cast<const CobotMsgs::Request::Request *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case CobotMessage_Response: {
+    case OutgoingMessagePayload_Response: {
       auto ptr = reinterpret_cast<const CobotMsgs::Response::Response *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case CobotMessage_LogMessage: {
+    case OutgoingMessagePayload_LogMessage: {
       auto ptr = reinterpret_cast<const CobotMsgs::LogMessage *>(obj);
       return verifier.VerifyTable(ptr);
     }
@@ -96,12 +200,12 @@ inline bool VerifyCobotMessage(::flatbuffers::Verifier &verifier, const void *ob
   }
 }
 
-inline bool VerifyCobotMessageVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types) {
+inline bool VerifyOutgoingMessagePayloadVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types) {
   if (!values || !types) return !values && !types;
   if (values->size() != types->size()) return false;
   for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
-    if (!VerifyCobotMessage(
-        verifier,  values->Get(i), types->GetEnum<CobotMessage>(i))) {
+    if (!VerifyOutgoingMessagePayload(
+        verifier,  values->Get(i), types->GetEnum<OutgoingMessagePayload>(i))) {
       return false;
     }
   }

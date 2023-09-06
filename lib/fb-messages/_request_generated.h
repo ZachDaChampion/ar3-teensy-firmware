@@ -31,7 +31,6 @@ struct Override;
 struct OverrideBuilder;
 
 struct OverrideEntry;
-struct OverrideEntryBuilder;
 
 struct GetJoints;
 struct GetJointsBuilder;
@@ -40,13 +39,11 @@ struct MoveTo;
 struct MoveToBuilder;
 
 struct MoveToEntry;
-struct MoveToEntryBuilder;
 
 struct MoveSpeed;
 struct MoveSpeedBuilder;
 
 struct MoveSpeedEntry;
-struct MoveSpeedEntryBuilder;
 
 struct Stop;
 struct StopBuilder;
@@ -163,6 +160,108 @@ template<> struct RequestPayloadTraits<CobotMsgs::Request::SetLogLevel> {
 
 bool VerifyRequestPayload(::flatbuffers::Verifier &verifier, const void *obj, RequestPayload type);
 bool VerifyRequestPayloadVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) OverrideEntry FLATBUFFERS_FINAL_CLASS {
+ private:
+  uint8_t joint_id_;
+  int8_t padding0__;  int16_t padding1__;
+  float angle_;
+
+ public:
+  OverrideEntry()
+      : joint_id_(0),
+        padding0__(0),
+        padding1__(0),
+        angle_(0) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  OverrideEntry(uint8_t _joint_id, float _angle)
+      : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
+        padding0__(0),
+        padding1__(0),
+        angle_(::flatbuffers::EndianScalar(_angle)) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  uint8_t joint_id() const {
+    return ::flatbuffers::EndianScalar(joint_id_);
+  }
+  float angle() const {
+    return ::flatbuffers::EndianScalar(angle_);
+  }
+};
+FLATBUFFERS_STRUCT_END(OverrideEntry, 8);
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveToEntry FLATBUFFERS_FINAL_CLASS {
+ private:
+  uint8_t joint_id_;
+  int8_t padding0__;  int16_t padding1__;
+  float angle_;
+  float speed_;
+
+ public:
+  MoveToEntry()
+      : joint_id_(0),
+        padding0__(0),
+        padding1__(0),
+        angle_(0),
+        speed_(0) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  MoveToEntry(uint8_t _joint_id, float _angle, float _speed)
+      : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
+        padding0__(0),
+        padding1__(0),
+        angle_(::flatbuffers::EndianScalar(_angle)),
+        speed_(::flatbuffers::EndianScalar(_speed)) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  uint8_t joint_id() const {
+    return ::flatbuffers::EndianScalar(joint_id_);
+  }
+  float angle() const {
+    return ::flatbuffers::EndianScalar(angle_);
+  }
+  float speed() const {
+    return ::flatbuffers::EndianScalar(speed_);
+  }
+};
+FLATBUFFERS_STRUCT_END(MoveToEntry, 12);
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveSpeedEntry FLATBUFFERS_FINAL_CLASS {
+ private:
+  uint8_t joint_id_;
+  int8_t padding0__;  int16_t padding1__;
+  float speed_;
+
+ public:
+  MoveSpeedEntry()
+      : joint_id_(0),
+        padding0__(0),
+        padding1__(0),
+        speed_(0) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  MoveSpeedEntry(uint8_t _joint_id, float _speed)
+      : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
+        padding0__(0),
+        padding1__(0),
+        speed_(::flatbuffers::EndianScalar(_speed)) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  uint8_t joint_id() const {
+    return ::flatbuffers::EndianScalar(joint_id_);
+  }
+  float speed() const {
+    return ::flatbuffers::EndianScalar(speed_);
+  }
+};
+FLATBUFFERS_STRUCT_END(MoveSpeedEntry, 8);
 
 struct Request FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef RequestBuilder Builder;
@@ -384,14 +483,13 @@ struct Override FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ENTRIES = 4
   };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::OverrideEntry>> *entries() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::OverrideEntry>> *>(VT_ENTRIES);
+  const ::flatbuffers::Vector<const CobotMsgs::Request::OverrideEntry *> *entries() const {
+    return GetPointer<const ::flatbuffers::Vector<const CobotMsgs::Request::OverrideEntry *> *>(VT_ENTRIES);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_ENTRIES) &&
            verifier.VerifyVector(entries()) &&
-           verifier.VerifyVectorOfTables(entries()) &&
            verifier.EndTable();
   }
 };
@@ -400,7 +498,7 @@ struct OverrideBuilder {
   typedef Override Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_entries(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::OverrideEntry>>> entries) {
+  void add_entries(::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Request::OverrideEntry *>> entries) {
     fbb_.AddOffset(Override::VT_ENTRIES, entries);
   }
   explicit OverrideBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
@@ -416,7 +514,7 @@ struct OverrideBuilder {
 
 inline ::flatbuffers::Offset<Override> CreateOverride(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::OverrideEntry>>> entries = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Request::OverrideEntry *>> entries = 0) {
   OverrideBuilder builder_(_fbb);
   builder_.add_entries(entries);
   return builder_.Finish();
@@ -424,62 +522,11 @@ inline ::flatbuffers::Offset<Override> CreateOverride(
 
 inline ::flatbuffers::Offset<Override> CreateOverrideDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<CobotMsgs::Request::OverrideEntry>> *entries = nullptr) {
-  auto entries__ = entries ? _fbb.CreateVector<::flatbuffers::Offset<CobotMsgs::Request::OverrideEntry>>(*entries) : 0;
+    const std::vector<CobotMsgs::Request::OverrideEntry> *entries = nullptr) {
+  auto entries__ = entries ? _fbb.CreateVectorOfStructs<CobotMsgs::Request::OverrideEntry>(*entries) : 0;
   return CobotMsgs::Request::CreateOverride(
       _fbb,
       entries__);
-}
-
-struct OverrideEntry FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef OverrideEntryBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_JOINT_ID = 4,
-    VT_ANGLE = 6
-  };
-  uint8_t joint_id() const {
-    return GetField<uint8_t>(VT_JOINT_ID, 0);
-  }
-  float angle() const {
-    return GetField<float>(VT_ANGLE, 0.0f);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_JOINT_ID, 1) &&
-           VerifyField<float>(verifier, VT_ANGLE, 4) &&
-           verifier.EndTable();
-  }
-};
-
-struct OverrideEntryBuilder {
-  typedef OverrideEntry Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_joint_id(uint8_t joint_id) {
-    fbb_.AddElement<uint8_t>(OverrideEntry::VT_JOINT_ID, joint_id, 0);
-  }
-  void add_angle(float angle) {
-    fbb_.AddElement<float>(OverrideEntry::VT_ANGLE, angle, 0.0f);
-  }
-  explicit OverrideEntryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<OverrideEntry> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<OverrideEntry>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<OverrideEntry> CreateOverrideEntry(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint8_t joint_id = 0,
-    float angle = 0.0f) {
-  OverrideEntryBuilder builder_(_fbb);
-  builder_.add_angle(angle);
-  builder_.add_joint_id(joint_id);
-  return builder_.Finish();
 }
 
 struct GetJoints FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -516,14 +563,13 @@ struct MoveTo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ENTRIES = 4
   };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveToEntry>> *entries() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveToEntry>> *>(VT_ENTRIES);
+  const ::flatbuffers::Vector<const CobotMsgs::Request::MoveToEntry *> *entries() const {
+    return GetPointer<const ::flatbuffers::Vector<const CobotMsgs::Request::MoveToEntry *> *>(VT_ENTRIES);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_ENTRIES) &&
            verifier.VerifyVector(entries()) &&
-           verifier.VerifyVectorOfTables(entries()) &&
            verifier.EndTable();
   }
 };
@@ -532,7 +578,7 @@ struct MoveToBuilder {
   typedef MoveTo Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_entries(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveToEntry>>> entries) {
+  void add_entries(::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Request::MoveToEntry *>> entries) {
     fbb_.AddOffset(MoveTo::VT_ENTRIES, entries);
   }
   explicit MoveToBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
@@ -548,7 +594,7 @@ struct MoveToBuilder {
 
 inline ::flatbuffers::Offset<MoveTo> CreateMoveTo(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveToEntry>>> entries = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Request::MoveToEntry *>> entries = 0) {
   MoveToBuilder builder_(_fbb);
   builder_.add_entries(entries);
   return builder_.Finish();
@@ -556,72 +602,11 @@ inline ::flatbuffers::Offset<MoveTo> CreateMoveTo(
 
 inline ::flatbuffers::Offset<MoveTo> CreateMoveToDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<CobotMsgs::Request::MoveToEntry>> *entries = nullptr) {
-  auto entries__ = entries ? _fbb.CreateVector<::flatbuffers::Offset<CobotMsgs::Request::MoveToEntry>>(*entries) : 0;
+    const std::vector<CobotMsgs::Request::MoveToEntry> *entries = nullptr) {
+  auto entries__ = entries ? _fbb.CreateVectorOfStructs<CobotMsgs::Request::MoveToEntry>(*entries) : 0;
   return CobotMsgs::Request::CreateMoveTo(
       _fbb,
       entries__);
-}
-
-struct MoveToEntry FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef MoveToEntryBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_JOINT_ID = 4,
-    VT_ANGLE = 6,
-    VT_SPEED = 8
-  };
-  uint8_t joint_id() const {
-    return GetField<uint8_t>(VT_JOINT_ID, 0);
-  }
-  float angle() const {
-    return GetField<float>(VT_ANGLE, 0.0f);
-  }
-  float speed() const {
-    return GetField<float>(VT_SPEED, 0.0f);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_JOINT_ID, 1) &&
-           VerifyField<float>(verifier, VT_ANGLE, 4) &&
-           VerifyField<float>(verifier, VT_SPEED, 4) &&
-           verifier.EndTable();
-  }
-};
-
-struct MoveToEntryBuilder {
-  typedef MoveToEntry Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_joint_id(uint8_t joint_id) {
-    fbb_.AddElement<uint8_t>(MoveToEntry::VT_JOINT_ID, joint_id, 0);
-  }
-  void add_angle(float angle) {
-    fbb_.AddElement<float>(MoveToEntry::VT_ANGLE, angle, 0.0f);
-  }
-  void add_speed(float speed) {
-    fbb_.AddElement<float>(MoveToEntry::VT_SPEED, speed, 0.0f);
-  }
-  explicit MoveToEntryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<MoveToEntry> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<MoveToEntry>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<MoveToEntry> CreateMoveToEntry(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint8_t joint_id = 0,
-    float angle = 0.0f,
-    float speed = 0.0f) {
-  MoveToEntryBuilder builder_(_fbb);
-  builder_.add_speed(speed);
-  builder_.add_angle(angle);
-  builder_.add_joint_id(joint_id);
-  return builder_.Finish();
 }
 
 struct MoveSpeed FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -629,14 +614,13 @@ struct MoveSpeed FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ENTRIES = 4
   };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveSpeedEntry>> *entries() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveSpeedEntry>> *>(VT_ENTRIES);
+  const ::flatbuffers::Vector<const CobotMsgs::Request::MoveSpeedEntry *> *entries() const {
+    return GetPointer<const ::flatbuffers::Vector<const CobotMsgs::Request::MoveSpeedEntry *> *>(VT_ENTRIES);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_ENTRIES) &&
            verifier.VerifyVector(entries()) &&
-           verifier.VerifyVectorOfTables(entries()) &&
            verifier.EndTable();
   }
 };
@@ -645,7 +629,7 @@ struct MoveSpeedBuilder {
   typedef MoveSpeed Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_entries(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveSpeedEntry>>> entries) {
+  void add_entries(::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Request::MoveSpeedEntry *>> entries) {
     fbb_.AddOffset(MoveSpeed::VT_ENTRIES, entries);
   }
   explicit MoveSpeedBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
@@ -661,7 +645,7 @@ struct MoveSpeedBuilder {
 
 inline ::flatbuffers::Offset<MoveSpeed> CreateMoveSpeed(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Request::MoveSpeedEntry>>> entries = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Request::MoveSpeedEntry *>> entries = 0) {
   MoveSpeedBuilder builder_(_fbb);
   builder_.add_entries(entries);
   return builder_.Finish();
@@ -669,62 +653,11 @@ inline ::flatbuffers::Offset<MoveSpeed> CreateMoveSpeed(
 
 inline ::flatbuffers::Offset<MoveSpeed> CreateMoveSpeedDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<CobotMsgs::Request::MoveSpeedEntry>> *entries = nullptr) {
-  auto entries__ = entries ? _fbb.CreateVector<::flatbuffers::Offset<CobotMsgs::Request::MoveSpeedEntry>>(*entries) : 0;
+    const std::vector<CobotMsgs::Request::MoveSpeedEntry> *entries = nullptr) {
+  auto entries__ = entries ? _fbb.CreateVectorOfStructs<CobotMsgs::Request::MoveSpeedEntry>(*entries) : 0;
   return CobotMsgs::Request::CreateMoveSpeed(
       _fbb,
       entries__);
-}
-
-struct MoveSpeedEntry FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef MoveSpeedEntryBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_JOINT_ID = 4,
-    VT_SPEED = 6
-  };
-  uint8_t joint_id() const {
-    return GetField<uint8_t>(VT_JOINT_ID, 0);
-  }
-  float speed() const {
-    return GetField<float>(VT_SPEED, 0.0f);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_JOINT_ID, 1) &&
-           VerifyField<float>(verifier, VT_SPEED, 4) &&
-           verifier.EndTable();
-  }
-};
-
-struct MoveSpeedEntryBuilder {
-  typedef MoveSpeedEntry Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_joint_id(uint8_t joint_id) {
-    fbb_.AddElement<uint8_t>(MoveSpeedEntry::VT_JOINT_ID, joint_id, 0);
-  }
-  void add_speed(float speed) {
-    fbb_.AddElement<float>(MoveSpeedEntry::VT_SPEED, speed, 0.0f);
-  }
-  explicit MoveSpeedEntryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<MoveSpeedEntry> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<MoveSpeedEntry>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<MoveSpeedEntry> CreateMoveSpeedEntry(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint8_t joint_id = 0,
-    float speed = 0.0f) {
-  MoveSpeedEntryBuilder builder_(_fbb);
-  builder_.add_speed(speed);
-  builder_.add_joint_id(joint_id);
-  return builder_.Finish();
 }
 
 struct Stop FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {

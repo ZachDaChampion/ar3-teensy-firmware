@@ -16,46 +16,49 @@ static_assert(FLATBUFFERS_VERSION_MAJOR == 23 &&
 namespace CobotMsgs {
 
 enum ErrorCode : int8_t {
-  ErrorCode_ERR_OTHER = 0,
-  ErrorCode_ERR_MALFORMED_REQUEST = 1,
-  ErrorCode_ERR_OUT_OF_RANGE = 2,
-  ErrorCode_ERR_INVALID_JOINT = 3,
-  ErrorCode_ERR_NOT_INITIALIZED = 4,
-  ErrorCode_ERR_NOT_CALIBRATED = 5,
-  ErrorCode_ERR_CANCELLED = 6,
-  ErrorCode_MIN = ErrorCode_ERR_OTHER,
-  ErrorCode_MAX = ErrorCode_ERR_CANCELLED
+  ErrorCode_OTHER = 0,
+  ErrorCode_MALFORMED_REQUEST = 1,
+  ErrorCode_OUT_OF_RANGE = 2,
+  ErrorCode_INVALID_JOINT = 3,
+  ErrorCode_NOT_INITIALIZED = 4,
+  ErrorCode_NOT_CALIBRATED = 5,
+  ErrorCode_CANCELLED = 6,
+  ErrorCode_INVALID_FIRMWARE_VERSION = 7,
+  ErrorCode_MIN = ErrorCode_OTHER,
+  ErrorCode_MAX = ErrorCode_INVALID_FIRMWARE_VERSION
 };
 
-inline const ErrorCode (&EnumValuesErrorCode())[7] {
+inline const ErrorCode (&EnumValuesErrorCode())[8] {
   static const ErrorCode values[] = {
-    ErrorCode_ERR_OTHER,
-    ErrorCode_ERR_MALFORMED_REQUEST,
-    ErrorCode_ERR_OUT_OF_RANGE,
-    ErrorCode_ERR_INVALID_JOINT,
-    ErrorCode_ERR_NOT_INITIALIZED,
-    ErrorCode_ERR_NOT_CALIBRATED,
-    ErrorCode_ERR_CANCELLED
+    ErrorCode_OTHER,
+    ErrorCode_MALFORMED_REQUEST,
+    ErrorCode_OUT_OF_RANGE,
+    ErrorCode_INVALID_JOINT,
+    ErrorCode_NOT_INITIALIZED,
+    ErrorCode_NOT_CALIBRATED,
+    ErrorCode_CANCELLED,
+    ErrorCode_INVALID_FIRMWARE_VERSION
   };
   return values;
 }
 
 inline const char * const *EnumNamesErrorCode() {
-  static const char * const names[8] = {
-    "ERR_OTHER",
-    "ERR_MALFORMED_REQUEST",
-    "ERR_OUT_OF_RANGE",
-    "ERR_INVALID_JOINT",
-    "ERR_NOT_INITIALIZED",
-    "ERR_NOT_CALIBRATED",
-    "ERR_CANCELLED",
+  static const char * const names[9] = {
+    "OTHER",
+    "MALFORMED_REQUEST",
+    "OUT_OF_RANGE",
+    "INVALID_JOINT",
+    "NOT_INITIALIZED",
+    "NOT_CALIBRATED",
+    "CANCELLED",
+    "INVALID_FIRMWARE_VERSION",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameErrorCode(ErrorCode e) {
-  if (::flatbuffers::IsOutRange(e, ErrorCode_ERR_OTHER, ErrorCode_ERR_CANCELLED)) return "";
+  if (::flatbuffers::IsOutRange(e, ErrorCode_OTHER, ErrorCode_INVALID_FIRMWARE_VERSION)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesErrorCode()[index];
 }

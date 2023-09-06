@@ -34,7 +34,6 @@ struct Joints;
 struct JointsBuilder;
 
 struct JointsEntry;
-struct JointsEntryBuilder;
 
 enum ResponsePayload : uint8_t {
   ResponsePayload_NONE = 0,
@@ -97,6 +96,38 @@ template<> struct ResponsePayloadTraits<CobotMsgs::Response::Joints> {
 
 bool VerifyResponsePayload(::flatbuffers::Verifier &verifier, const void *obj, ResponsePayload type);
 bool VerifyResponsePayloadVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) JointsEntry FLATBUFFERS_FINAL_CLASS {
+ private:
+  uint8_t joint_id_;
+  int8_t padding0__;  int16_t padding1__;
+  float angle_;
+
+ public:
+  JointsEntry()
+      : joint_id_(0),
+        padding0__(0),
+        padding1__(0),
+        angle_(0) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  JointsEntry(uint8_t _joint_id, float _angle)
+      : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
+        padding0__(0),
+        padding1__(0),
+        angle_(::flatbuffers::EndianScalar(_angle)) {
+    (void)padding0__;
+    (void)padding1__;
+  }
+  uint8_t joint_id() const {
+    return ::flatbuffers::EndianScalar(joint_id_);
+  }
+  float angle() const {
+    return ::flatbuffers::EndianScalar(angle_);
+  }
+};
+FLATBUFFERS_STRUCT_END(JointsEntry, 8);
 
 struct Response FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef ResponseBuilder Builder;
@@ -262,7 +293,7 @@ struct ErrorBuilder {
 
 inline ::flatbuffers::Offset<Error> CreateError(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    CobotMsgs::ErrorCode error_code = CobotMsgs::ErrorCode_ERR_OTHER,
+    CobotMsgs::ErrorCode error_code = CobotMsgs::ErrorCode_OTHER,
     ::flatbuffers::Offset<::flatbuffers::String> error_message = 0) {
   ErrorBuilder builder_(_fbb);
   builder_.add_error_message(error_message);
@@ -272,7 +303,7 @@ inline ::flatbuffers::Offset<Error> CreateError(
 
 inline ::flatbuffers::Offset<Error> CreateErrorDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    CobotMsgs::ErrorCode error_code = CobotMsgs::ErrorCode_ERR_OTHER,
+    CobotMsgs::ErrorCode error_code = CobotMsgs::ErrorCode_OTHER,
     const char *error_message = nullptr) {
   auto error_message__ = error_message ? _fbb.CreateString(error_message) : 0;
   return CobotMsgs::Response::CreateError(
@@ -315,14 +346,13 @@ struct Joints FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_JOINTS = 4
   };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Response::JointsEntry>> *joints() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Response::JointsEntry>> *>(VT_JOINTS);
+  const ::flatbuffers::Vector<const CobotMsgs::Response::JointsEntry *> *joints() const {
+    return GetPointer<const ::flatbuffers::Vector<const CobotMsgs::Response::JointsEntry *> *>(VT_JOINTS);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_JOINTS) &&
            verifier.VerifyVector(joints()) &&
-           verifier.VerifyVectorOfTables(joints()) &&
            verifier.EndTable();
   }
 };
@@ -331,7 +361,7 @@ struct JointsBuilder {
   typedef Joints Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_joints(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Response::JointsEntry>>> joints) {
+  void add_joints(::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Response::JointsEntry *>> joints) {
     fbb_.AddOffset(Joints::VT_JOINTS, joints);
   }
   explicit JointsBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
@@ -347,7 +377,7 @@ struct JointsBuilder {
 
 inline ::flatbuffers::Offset<Joints> CreateJoints(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CobotMsgs::Response::JointsEntry>>> joints = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<const CobotMsgs::Response::JointsEntry *>> joints = 0) {
   JointsBuilder builder_(_fbb);
   builder_.add_joints(joints);
   return builder_.Finish();
@@ -355,62 +385,11 @@ inline ::flatbuffers::Offset<Joints> CreateJoints(
 
 inline ::flatbuffers::Offset<Joints> CreateJointsDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<CobotMsgs::Response::JointsEntry>> *joints = nullptr) {
-  auto joints__ = joints ? _fbb.CreateVector<::flatbuffers::Offset<CobotMsgs::Response::JointsEntry>>(*joints) : 0;
+    const std::vector<CobotMsgs::Response::JointsEntry> *joints = nullptr) {
+  auto joints__ = joints ? _fbb.CreateVectorOfStructs<CobotMsgs::Response::JointsEntry>(*joints) : 0;
   return CobotMsgs::Response::CreateJoints(
       _fbb,
       joints__);
-}
-
-struct JointsEntry FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef JointsEntryBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_JOINT_ID = 4,
-    VT_ANGLE = 6
-  };
-  uint8_t joint_id() const {
-    return GetField<uint8_t>(VT_JOINT_ID, 0);
-  }
-  float angle() const {
-    return GetField<float>(VT_ANGLE, 0.0f);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_JOINT_ID, 1) &&
-           VerifyField<float>(verifier, VT_ANGLE, 4) &&
-           verifier.EndTable();
-  }
-};
-
-struct JointsEntryBuilder {
-  typedef JointsEntry Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_joint_id(uint8_t joint_id) {
-    fbb_.AddElement<uint8_t>(JointsEntry::VT_JOINT_ID, joint_id, 0);
-  }
-  void add_angle(float angle) {
-    fbb_.AddElement<float>(JointsEntry::VT_ANGLE, angle, 0.0f);
-  }
-  explicit JointsEntryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<JointsEntry> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<JointsEntry>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<JointsEntry> CreateJointsEntry(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint8_t joint_id = 0,
-    float angle = 0.0f) {
-  JointsEntryBuilder builder_(_fbb);
-  builder_.add_angle(angle);
-  builder_.add_joint_id(joint_id);
-  return builder_.Finish();
 }
 
 inline bool VerifyResponsePayload(::flatbuffers::Verifier &verifier, const void *obj, ResponsePayload type) {

@@ -69,6 +69,13 @@ void Joint::calibrate()
   stepper.setSpeed(config.calibration_speed / motor_deg_per_step);
 }
 
+void Joint::override_position(float position)
+{
+  state.id = State::IDLE;
+  is_calibrated = true;
+  stepper.setCurrentPosition(position / motor_deg_per_step);
+}
+
 void Joint::update()
 {
   switch (state.id) {

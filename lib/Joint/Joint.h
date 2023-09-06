@@ -156,6 +156,13 @@ public:
   void calibrate();
 
   /**
+   * Override the current position of the joint. This will mark the joint as calibrated.
+   * 
+   * @param[in] position The new position of the joint (in degrees).
+   */
+  void override_position(float position);
+
+  /**
    * Update the joint. This should be called as frequently as possible.
    */
   void update();
