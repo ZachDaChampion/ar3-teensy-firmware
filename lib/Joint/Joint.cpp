@@ -86,6 +86,17 @@ void Joint::override_position(float position)
   stepper.setCurrentPosition(position / motor_deg_per_step);
 }
 
+bool Joint::position_within_range(float position)
+{
+  return (position >= config.min_steps * motor_deg_per_step) &&
+         (position <= config.max_steps * motor_deg_per_step);
+}
+
+bool Joint::speed_within_range(float speed)
+{
+  return (speed >= -config.max_speed) && (speed <= config.max_speed);
+}
+
 void Joint::reset()
 {
   state.id = State::IDLE;

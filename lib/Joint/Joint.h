@@ -170,6 +170,22 @@ public:
   void override_position(float position);
 
   /**
+   * Determine whether or not a position is within the range of the joint.
+   * 
+   * @param[in] position The position to check (in degrees).
+   * @return Whether or not the position is within the range of the joint.
+   */
+  bool position_within_range(float position);
+
+  /**
+   * Determine whether or not a speed is within the range of the joint.
+   * 
+   * @param[in] speed The speed to check (in degrees per second).
+   * @return Whether or not the speed is within the range of the joint.
+   */
+  bool speed_within_range(float speed);
+
+  /**
    * Reset the joint. This will stop the joint immediateyl and mark it as uncalibrated.
    */
   void reset();

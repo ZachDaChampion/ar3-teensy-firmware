@@ -2,12 +2,15 @@
 
 Firmware for a Teensy microcontroller to control the Annin Robotics AR3
 
-# Protobuf
+## TODO
 
-The firmware uses [Protobuf](https://developers.google.com/protocol-buffers) to communicate with the
-host computer. The protobuf definitions are located in the `proto` submodule and are compiled for
-use with the [EmbeddedProto](https://embeddedproto.com/) library. The compiled definitions are
-located in `include/proto`.
+- Send error when interrupting a move
+
+# Flatbuffers
+
+The firmware uses [Flatbuffers](https://google.github.io/flatbuffers/) to communicate with the
+host computer. The Flatbuffers schema is defined in the `messages` folder, which is a submodule
+pointing to the [firmware-messages](https://github.com/COBOT-Team/firmware-messages) repository.
 
 # PlatformIO
 

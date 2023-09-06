@@ -175,25 +175,41 @@ int handle_override(uint32_t request_id, const CobotMsgs::Request::Override* dat
   auto entries = data->entries();
   auto entry_count = entries->size();
 
-  // Stop all joints and override the position of any joints that are specified. Count the number of
-  // joints we override so that we can verify that all joints were found.
+  // Stop all joints and verify that all specified joints exist and that the override angles are
+  // within the joint limits. This will create a list of new joint positions that will be applied
+  // after all joints have been verified.
   uint8_t found = 0;
+  float new_positions[JOINT_COUNT];
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].stop(false);
+    new_positions[i] = joints[i].get_position();
+
     for (size_t j = 0; j < entry_count; ++j) {
       auto entry = entries->Get(j);
+
       if (entry->joint_id() == i) {
-        joints[i].override_position(entry->angle());
+        if (!joints[i].position_within_range(entry->angle())) {
+          return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
+                                                  request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                                  "Some joints are out of range.");
+        }
+
+        new_positions[i] = entry->angle();
         ++found;
         break;
       }
     }
   }
 
+  // Verify that all specified joints were found.
   if (found != entry_count) {
     return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
                                             request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
                                             "Some joints were not found.");
+  }
+
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    joints[i].override_position(new_positions[i]);
   }
   return msg_helper::write_ack(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, request_id);
 }
@@ -253,35 +269,58 @@ int handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
   }
   auto entries = data->entries();
 
-  // Stop all joints and ensure that all specified joints exist and are calibrated. This will also
-  // create a map from joint IDs to entry indices so that we can easily find the entry for a given
-  // joint.
+  // Create a map from joint index to entry index. Any joint that does not have an entry will be
+  // mapped to -1. This will also count the number of entries that were found so that we can verify
+  // that all joints were found.
   uint8_t found = 0;
   int8_t map[JOINT_COUNT];
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
     map[i] = -1;
     for (size_t j = 0; j < entries->size(); ++j) {
       auto entry = entries->Get(j);
       if (entry->joint_id() == i) {
-        if (!joints[i].get_is_calibrated()) {
-          return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                                  request_id, CobotMsgs::ErrorCode_NOT_CALIBRATED,
-                                                  "Some joints are not calibrated.");
-        }
         ++found;
         map[i] = j;
         break;
       }
     }
   }
+
+  // Verify that all specified joints were found.
   if (found < entries->size()) {
     return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
                                             request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
                                             "Some joints were not found.");
   }
 
-  // Move all joints to their target positions.
+  // Ensure that all new positions are within the joint and speed limits. Speeds must be
+  // non-negative to be valid.
+  for (size_t i = 0; i < entries->size(); ++i) {
+    if (map[i] == -1) continue;
+    auto entry = entries->Get(map[i]);
+    if (!joints[i].position_within_range(entry->angle())) {
+      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
+                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                              "Some joint positions are out of range.");
+    }
+    if (entry->speed() < 0) {
+      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
+                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                              "Some joint speeds are negative.");
+    }
+    if (!joints[i].speed_within_range(entry->speed())) {
+      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
+                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                              "Some joint speeds are out of range.");
+    }
+  }
+
+  // Stop all joints immediately.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    joints[i].stop(false);
+  }
+
+  // Move all specified joints to their target positions.
   for (size_t i = 0; i < entries->size(); ++i) {
     if (map[i] != -1) {
       auto entry = entries->Get(map[i]);
@@ -315,35 +354,48 @@ int handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed* 
   }
   auto entries = data->entries();
 
-  // Stop all joints and ensure that all specified joints exist and are calibrated. This will also
-  // create a map from joint IDs to entry indices so that we can easily find the entry for a given
-  // joint.
+  // Create a map from joint index to entry index. Any joint that does not have an entry will be
+  // mapped to -1. This will also count the number of entries that were found so that we can verify
+  // that all joints were found.
   uint8_t found = 0;
   int8_t map[JOINT_COUNT];
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
     map[i] = -1;
     for (size_t j = 0; j < entries->size(); ++j) {
       auto entry = entries->Get(j);
       if (entry->joint_id() == i) {
-        if (!joints[i].get_is_calibrated()) {
-          return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
-                                                  request_id, CobotMsgs::ErrorCode_NOT_CALIBRATED,
-                                                  "Some joints are not calibrated.");
-        }
         ++found;
         map[i] = j;
         break;
       }
     }
   }
+
+  // Verify that all specified joints were found.
   if (found < entries->size()) {
     return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
                                             request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
                                             "Some joints were not found.");
   }
 
-  // Move all joints at their target speeds.
+  // Ensure that all speeds are within the joint limits. Speeds may be negative to indicate
+  // backwards motion.
+  for (size_t i = 0; i < entries->size(); ++i) {
+    if (map[i] == -1) continue;
+    auto entry = entries->Get(map[i]);
+    if (!joints[i].speed_within_range(entry->speed())) {
+      return msg_helper::write_error_response(serial_buffer_out, SERIAL_BUFFER_SIZE, builder,
+                                              request_id, CobotMsgs::ErrorCode_OUT_OF_RANGE,
+                                              "Some joint speeds are out of range.");
+    }
+  }
+
+  // Stop all joints immediately.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    joints[i].stop(false);
+  }
+
+  // Move all specified joints at their target speeds.
   for (size_t i = 0; i < entries->size(); ++i) {
     if (map[i] != -1) {
       auto entry = entries->Get(map[i]);
