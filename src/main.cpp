@@ -594,7 +594,7 @@ void loop()
     case CobotState::IDLE:
       break;
 
-    // In the STOPPING, CALIBRATING, MOVE_TO, and MOVE_SPEED state, check if all joints are idle.
+    // In the STOPPING, CALIBRATING, MOVE_TO, and MOVE_SPEED states, check if all joints are idle.
     // If so, send a done response and transition to the IDLE state.
     case CobotState::STOPPING:
     case CobotState::CALIBRATING:
@@ -611,7 +611,6 @@ void loop()
         messenger.send_done(state.msg_id);
         state.id = CobotState::IDLE;
         state.msg_id = 0;
-        return;  // Return so that joints get updated again.
       }
       break;
     }
