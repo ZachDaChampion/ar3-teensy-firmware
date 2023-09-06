@@ -4,6 +4,7 @@
     ".dockerignore": "plaintext",
     "*.tcc": "cpp",
     "string_view": "cpp",
-    "array": "cpp"
+    "array": "cpp",
+    "random": "cpp"
   }
 }

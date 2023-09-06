@@ -19,6 +19,11 @@ Joint::Joint(JointConfig config)
 
 void Joint::init() {}
 
+Joint::State Joint::get_state()
+{
+  return state;
+}
+
 float Joint::get_position()
 {
   return encoder.read() * enc_deg_per_tick;
@@ -69,11 +74,29 @@ void Joint::calibrate()
   stepper.setSpeed(config.calibration_speed / motor_deg_per_step);
 }
 
+bool Joint::get_is_calibrated()
+{
+  return is_calibrated;
+}
+
 void Joint::override_position(float position)
 {
   state.id = State::IDLE;
   is_calibrated = true;
   stepper.setCurrentPosition(position / motor_deg_per_step);
+}
+
+void Joint::reset()
+{
+  state.id = State::IDLE;
+  is_calibrated = false;
+  stepper.setSpeed(0);
+  stepper.runSpeed();
+  stepper.setCurrentPosition(0);
+  encoder.write(0);
+  last_encoder_pos = 0;
+  measured_speed = 0;
+  micros_timer = 0;
 }
 
 void Joint::update()
@@ -129,7 +152,7 @@ void Joint::update()
   float dt = micros_timer / 1000000.0;
   micros_timer = 0;
 
-  float unfiltered_speed = (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
+  float unfiltered_speed = (dt == 0) ? 0 : (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
   float scaled_filter_strength = config.speed_filter_strength * dt;
 
   if (scaled_filter_strength >= 1) {

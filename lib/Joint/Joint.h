@@ -156,11 +156,23 @@ public:
   void calibrate();
 
   /**
+   * Get whether or not the joint is calibrated.
+   *
+   * @return Whether or not the joint is calibrated.
+   */
+  bool get_is_calibrated();
+
+  /**
    * Override the current position of the joint. This will mark the joint as calibrated.
-   * 
+   *
    * @param[in] position The new position of the joint (in degrees).
    */
   void override_position(float position);
+
+  /**
+   * Reset the joint. This will stop the joint immediateyl and mark it as uncalibrated.
+   */
+  void reset();
 
   /**
    * Update the joint. This should be called as frequently as possible.
