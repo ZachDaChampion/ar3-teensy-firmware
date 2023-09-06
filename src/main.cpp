@@ -498,6 +498,42 @@ void loop()
     joint.update();
   }
 
+  // Update the state of the cobot.
+  switch (state.id) {
+    // In the IDLE state, do nothing.
+    case CobotState::IDLE:
+      break;
+
+    // In the STOPPING, CALIBRATING, MOVE_TO, and MOVE_SPEED state, check if all joints are idle.
+    // If so, send a done response and transition to the IDLE state.
+    case CobotState::STOPPING:
+    case CobotState::CALIBRATING:
+    case CobotState::MOVE_TO:
+    case CobotState::MOVE_SPEED: {
+      bool all_stopped = true;
+      for (auto joint : joints) {
+        if (joint.get_state().id != Joint::State::IDLE) {
+          all_stopped = false;
+          break;
+        }
+      }
+      if (all_stopped) {
+        int written =
+          msg_helper::write_done(serial_buffer_out, SERIAL_BUFFER_SIZE, builder, state.msg_id);
+        if (written > 0) {
+          serial_buffer_out_len += written;
+          Serial.write(serial_buffer_out, serial_buffer_out_len);
+          Serial.flush();
+        }
+        serial_buffer_out_len = 0;
+        state.id = CobotState::IDLE;
+        state.msg_id = 0;
+        return;  // Return so that joints get updated again.
+      }
+      break;
+    }
+  }
+
   // Read from the serial port until the buffer is full or there are no more bytes to read.
   if (!Serial.available()) return;
   while (serial_buffer_in_len < SERIAL_BUFFER_SIZE) {
