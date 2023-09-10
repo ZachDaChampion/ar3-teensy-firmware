@@ -4,7 +4,7 @@ Joint::Joint(JointConfig config)
   : config(config)
   , stepper(AccelStepper::DRIVER, config.step_pin, config.dir_pin)
   , encoder(config.enc_a_pin, config.enc_b_pin)
-  , limit_switch(config.lim_pin, config.lim_debounce_time)
+  , limit_switch(config.lim_pin)
 {
   this->state.id = State::IDLE;
   this->is_calibrated = false;
@@ -13,15 +13,19 @@ Joint::Joint(JointConfig config)
   this->enc_deg_per_tick = 360.0 / (config.enc_ticks_per_rev * config.enc_reduction);
   this->motor_deg_per_step = 360.0 / (config.motor_steps_per_rev * config.motor_reduction);
 
-  this->stepper.setMaxSpeed(config.max_speed);
-  this->stepper.setAcceleration(config.max_accel);
+  this->stepper.setMinPulseWidth(5);  // VERY IMPORTANT, THIS TOOK FUCKING HOURS TO FIGURE OUT
+  this->stepper.setMaxSpeed(config.max_speed / motor_deg_per_step);
+  this->stepper.setAcceleration(config.max_accel / motor_deg_per_step);
 }
 
-void Joint::init() {}
-
-Joint::State Joint::get_state()
+void Joint::init()
 {
-  return state;
+  pinMode(config.lim_pin, INPUT_PULLDOWN);
+}
+
+Joint::State* Joint::get_state()
+{
+  return &state;
 }
 
 float Joint::get_position()
@@ -98,6 +102,11 @@ void Joint::calibrate()
 {
   state.id = State::CALIBRATING;
   stepper.setSpeed(config.calibration_speed / motor_deg_per_step);
+  Serial.print("Calibrating joint ");
+  Serial.print(config.id);
+  Serial.print(" at ");
+  Serial.print(config.calibration_speed / motor_deg_per_step);
+  Serial.println(" steps/s");
 }
 
 bool Joint::get_is_calibrated()
@@ -151,15 +160,16 @@ void Joint::update()
       stepper.run();
       break;
 
-    case State::CALIBRATING:
-      if (limit_switch.read()) {
+    case State::CALIBRATING: {
+      if (limit_switch.read() && limit_switch.read_interval(1, 100)) {
         stepper.setCurrentPosition(config.ref_steps);
         is_calibrated = true;
         state.id = State::IDLE;
         stepper.setSpeed(0);
       }
       stepper.runSpeed();
-      break;
+
+    } break;
 
     case State::MOVE_TO_AUTO:
       if (!stepper.isRunning()) {

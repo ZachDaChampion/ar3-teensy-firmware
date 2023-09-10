@@ -1,1 +1,2 @@
 flatc --cpp -o lib/fb-messages -I messages/flatbuffers messages/flatbuffers/main.fbs messages/flatbuffers/_errors.fbs messages/flatbuffers/_log.fbs messages/flatbuffers/_request.fbs messages/flatbuffers/_response.fbs
+flatc --python -o scripts/fb -I messages/flatbuffers messages/flatbuffers/main.fbs messages/flatbuffers/_errors.fbs messages/flatbuffers/_log.fbs messages/flatbuffers/_request.fbs messages/flatbuffers/_response.fbs

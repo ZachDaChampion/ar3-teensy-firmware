@@ -4,6 +4,13 @@
  *
  * @version 1.0
  * @date 2023-09-01
+ *
+ * This is the main entrypoint for the COBOT firmware. All of the main functionality is contained
+ * here. If the firmware is ever significantly updated, especially if the binary protocol changes,
+ * you MUST increment the `FW_VERSION` and `FW_VERSION_STR` macros. They should always be equal.
+ *
+ * Joint characteristics should be configured in the "Joint configuration" section. Don't mess with
+ * these unless you know what you're doing.
  */
 
 #include <Arduino.h>
@@ -49,21 +56,21 @@ static Joint joints[] = { Joint({
   .id = 0,
   .name = "base",
 
-  .min_steps = 0,  // TODO
-  .max_steps = 0,  // TODO
-  .ref_steps = 0,  // TODO
+  .min_steps = -183,
+  .max_steps = 115,
+  .ref_steps = -183,
 
   .motor_steps_per_rev = 400,
   .enc_ticks_per_rev = 2048,
 
-  .motor_reduction = 7.0,
-  .enc_reduction = 7.0,
+  .motor_reduction = 40.0,
+  .enc_reduction = 40.0,
 
   .direction = 1,
 
   .max_speed = 5.0,
   .max_accel = 10.0,
-  .calibration_speed = 5.0,
+  .calibration_speed = -5.0,
 
   .step_pin = 0,
   .dir_pin = 1,
@@ -73,7 +80,6 @@ static Joint joints[] = { Joint({
   .speed_filter_strength = 5.0,
 
   .lim_pin = 26,
-  .lim_debounce_time = 50,
 }) };
 
 //                                                                                                //
@@ -584,7 +590,7 @@ void setup()
 void loop()
 {
   // Update all joints.
-  for (auto joint : joints) {
+  for (auto& joint : joints) {
     joint.update();
   }
 
@@ -602,7 +608,7 @@ void loop()
     case CobotState::MOVE_SPEED: {
       bool all_stopped = true;
       for (auto joint : joints) {
-        if (joint.get_state().id != Joint::State::IDLE) {
+        if (joint.get_state()->id != Joint::State::IDLE) {
           all_stopped = false;
           break;
         }
@@ -638,15 +644,18 @@ void loop()
     return;
   }
 
-  // Remove the message from the input buffer.
-  serial_buffer_in_len = framing::remove_frame(serial_buffer_in, serial_buffer_in_len);
+  Serial.println("Message received");
+  Serial.println(msg_len);
 
   // Parse the message as a request.
-  flatbuffers::FlatBufferBuilder builder(1024);
-  auto incoming_msg = flatbuffers::GetRoot<CobotMsgs::IncomingMessage>(serial_buffer_in);
+  auto incoming_msg = flatbuffers::GetRoot<CobotMsgs::IncomingMessage>(serial_buffer_in + 3);
   auto request = incoming_msg->payload();
   auto request_type = request->payload_type();
   auto request_id = request->message_id();
+
+  Serial.println("Request received");
+  Serial.println(request_id);
+  Serial.println(request_type);
 
   // Handle the request.
   switch (request_type) {
@@ -686,4 +695,7 @@ void loop()
                                     "Unknown request type.");
       break;
   }
+
+  // Remove the message from the input buffer.
+  serial_buffer_in_len = framing::remove_frame(serial_buffer_in, serial_buffer_in_len);
 }

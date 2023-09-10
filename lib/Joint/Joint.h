@@ -46,7 +46,6 @@ struct JointConfig {
   float speed_filter_strength;  // Strength of the speed filter (percent of new speed per second)
 
   uint8_t lim_pin;             // Limit switch pin
-  uint16_t lim_debounce_time;  // Debounce time for the limit switch
 };
 
 /**
@@ -105,7 +104,7 @@ public:
    *
    * @return The current state of the joint.
    */
-  State get_state();
+  State* get_state();
 
   /**
    * Get the current position of the joint.
@@ -198,7 +197,7 @@ public:
 private:
   AccelStepper stepper;
   Encoder encoder;
-  LimitSwitch limit_switch;
+  LimitSwitch<64> limit_switch;
 
   float enc_deg_per_tick;
   float motor_deg_per_step;
