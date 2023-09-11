@@ -108,7 +108,7 @@ for line in data:
   line = line.replace(" ", "")
   steps = line.split('steps:')[1].split('enc:')[0]
   enc = line.split('enc:')[1].split('tps:')[0]
-  parsed.append((int(steps), int(enc)))
+  parsed.append((int(steps) * 360 / 400, int(enc) * 360 / 2048))
 
 # Each line is 100ms apart. Plot both steps and encoders on the same graph against time.
 # x-axis is time in seconds
