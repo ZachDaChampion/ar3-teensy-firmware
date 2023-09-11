@@ -56,9 +56,9 @@ static Joint joints[] = { Joint({
   .id = 0,
   .name = "base",
 
-  .min_steps = -183,
-  .max_steps = 115,
-  .ref_steps = -183,
+  .min_steps = -7477,
+  .max_steps = 4600,
+  .ref_steps = -7477,
 
   .motor_steps_per_rev = 400,
   .enc_ticks_per_rev = 2048,
@@ -66,11 +66,11 @@ static Joint joints[] = { Joint({
   .motor_reduction = 40.0,
   .enc_reduction = 40.0,
 
-  .direction = 1,
+  .direction = -1,
 
-  .max_speed = 5.0,
+  .max_speed = 20.0,
   .max_accel = 10.0,
-  .calibration_speed = -5.0,
+  .calibration_speed = -10.0,
 
   .step_pin = 0,
   .dir_pin = 1,

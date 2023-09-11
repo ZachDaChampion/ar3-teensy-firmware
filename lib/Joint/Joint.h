@@ -197,10 +197,11 @@ public:
 private:
   AccelStepper stepper;
   Encoder encoder;
-  LimitSwitch<64> limit_switch;
+  LimitSwitch<8> limit_switch;
 
   float enc_deg_per_tick;
   float motor_deg_per_step;
+  float enc_ticks_per_step;
 
   State state;
   JointConfig config;

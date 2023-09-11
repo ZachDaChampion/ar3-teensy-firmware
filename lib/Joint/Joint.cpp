@@ -10,8 +10,9 @@ Joint::Joint(JointConfig config)
   this->is_calibrated = false;
   this->micros_timer = 0;
 
-  this->enc_deg_per_tick = 360.0 / (config.enc_ticks_per_rev * config.enc_reduction);
-  this->motor_deg_per_step = 360.0 / (config.motor_steps_per_rev * config.motor_reduction);
+  this->enc_deg_per_tick = 360.0 / ((float)config.enc_ticks_per_rev * config.enc_reduction);
+  this->motor_deg_per_step = 360.0 / ((float)config.motor_steps_per_rev * config.motor_reduction);
+  this->enc_ticks_per_step = (float)config.enc_ticks_per_rev / (float)config.motor_steps_per_rev;
 
   this->stepper.setMinPulseWidth(5);  // VERY IMPORTANT, THIS TOOK FUCKING HOURS TO FIGURE OUT
   this->stepper.setMaxSpeed(config.max_speed / motor_deg_per_step);
@@ -41,7 +42,7 @@ float Joint::get_speed()
 void Joint::move_to_auto(float target)
 {
   state.id = State::MOVE_TO_AUTO;
-  state.data.move_to_auto.target_steps = target / motor_deg_per_step;
+  state.data.move_to_auto.target_steps = config.direction * target / motor_deg_per_step;
 
   // Limit the target position to the range of the joint.
   if (state.data.move_to_auto.target_steps < config.min_steps)
@@ -55,7 +56,7 @@ void Joint::move_to_auto(float target)
 void Joint::move_to_speed(float target, float speed)
 {
   state.id = State::MOVE_TO_SPEED;
-  state.data.move_to_speed.target_steps = target / motor_deg_per_step;
+  state.data.move_to_speed.target_steps = config.direction * target / motor_deg_per_step;
   state.data.move_to_speed.speed = speed / motor_deg_per_step;
 
   // Limit the target position to the range of the joint.
@@ -76,7 +77,7 @@ void Joint::move_to_speed(float target, float speed)
 void Joint::move_forever_speed(float speed)
 {
   state.id = State::MOVE_FOREVER_SPEED;
-  state.data.move_forever_speed.speed = speed / motor_deg_per_step;
+  state.data.move_forever_speed.speed = config.direction * speed / motor_deg_per_step;
 
   // Limit the speed to between -max_speed and max_speed.
   if (state.data.move_forever_speed.speed < -config.max_speed)
@@ -145,6 +146,7 @@ void Joint::reset()
   micros_timer = 0;
 }
 
+uint32_t last_print = 0;
 void Joint::update()
 {
   switch (state.id) {
@@ -163,6 +165,7 @@ void Joint::update()
     case State::CALIBRATING: {
       if (limit_switch.read() && limit_switch.read_interval(1, 100)) {
         stepper.setCurrentPosition(config.ref_steps);
+        encoder.write(config.ref_steps * enc_ticks_per_step);
         is_calibrated = true;
         state.id = State::IDLE;
         stepper.setSpeed(0);
@@ -217,4 +220,14 @@ void Joint::update()
       measured_speed * (1 - scaled_filter_strength) + unfiltered_speed * scaled_filter_strength;
   }
   last_encoder_pos = encoder_pos;
+
+  if (millis() - last_print > 100) {
+    last_print = millis();
+    Serial.print("steps: ");
+    Serial.print(stepper.currentPosition());
+    Serial.print("\tenc: ");
+    Serial.print(encoder_pos);
+    Serial.print("\ttps: ");
+    Serial.println(enc_ticks_per_step);
+  }
 }
