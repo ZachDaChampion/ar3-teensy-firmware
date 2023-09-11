@@ -3,6 +3,7 @@ import fb.CobotMsgs.IncomingMessage as IncomingMessage
 import fb.CobotMsgs.Request.Request as Request
 import fb.CobotMsgs.Request.Init as Init
 import fb.CobotMsgs.Request.Calibrate as Calibrate
+import fb.CobotMsgs.Request.GoHome as GoHome
 import fb.CobotMsgs.Request.RequestPayload as RequestPayload
 import serial
 
@@ -65,6 +66,23 @@ def gen_calibrate(bitfield):
   Request.AddMessageId(builder, uuid)
   Request.AddPayloadType(builder, RequestPayload.RequestPayload().Calibrate)
   Request.AddPayload(builder, calibrate_msg)
+  request = Request.End(builder)
+  IncomingMessage.Start(builder)
+  IncomingMessage.AddPayload(builder, request)
+  incoming_message = IncomingMessage.End(builder)
+  builder.Finish(incoming_message)
+  return builder.Output()
+
+
+def gen_home(bitfield):
+  builder = flatbuffers.Builder()
+  GoHome.Start(builder)
+  GoHome.AddJointsBitfield(builder, bitfield)
+  go_home_msg = GoHome.End(builder)
+  Request.Start(builder)
+  Request.AddMessageId(builder, uuid)
+  Request.AddPayloadType(builder, RequestPayload.RequestPayload().GoHome)
+  Request.AddPayload(builder, go_home_msg)
   request = Request.End(builder)
   IncomingMessage.Start(builder)
   IncomingMessage.AddPayload(builder, request)
