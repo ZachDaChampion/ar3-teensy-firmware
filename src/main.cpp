@@ -47,6 +47,15 @@ struct CobotState {
 
   // The ID of the message that initiated the state.
   uint32_t msg_id;
+
+  // State-specific data.
+  union {
+    // CALIBRATING
+    struct {
+      // Bitfield of joints left to calibrate.
+      uint8_t joint_bitfield;
+    } calibrating;
+  };
 };
 
 //                                                                                                //
@@ -130,13 +139,13 @@ void handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* 
                                   "Interrupted by calibration");
   }
 
-  // Stop all joints and calibrate the specified joints.
+  // Stop all joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].stop(false);
-    if (joints_bf & (1 << i)) {
-      joints[i].calibrate();
-    }
   }
+
+  // Set the calibrating bitfield so that the update loop knows which joints to calibrate.
+  state.calibrating.joint_bitfield = joints_bf;
 
   // Set the state to CALIBRATING and respond to the request with an ACK.
   state.id = CobotState::CALIBRATING;
@@ -576,14 +585,46 @@ void loop()
     case CobotState::IDLE:
       break;
 
-    // In the STOPPING, CALIBRATING, MOVE_TO, and MOVE_SPEED states, check if all joints are idle.
+    // In the CALIBRATING state, check if a joint is still calibrating. If not, start calibrating
+    // the next joint. If all joints are calibrated, send a done response and transition to the IDLE
+    // state.
+    case CobotState::CALIBRATING: {
+      // Check if any joints are actively calibrating.
+      bool all_stopped = false;
+      for (auto& joint : joints) {
+        if (joint.get_state()->id == Joint::State::CALIBRATING) {
+          all_stopped = false;
+          break;
+        }
+      }
+
+      // If all joints are calibrated, send a done response and transition to the IDLE state.
+      if (state.calibrating.joint_bitfield == 0) {
+        messenger.send_done(state.msg_id);
+        state.id = CobotState::IDLE;
+        state.msg_id = 0;
+      }
+
+      // If all joints are stopped but there are still joints left to calibrate, start calibrating
+      // the next joint in the calibration order.
+      else if (all_stopped) {
+        for (auto index : CALIBRATION_ORDER) {
+          if (state.calibrating.joint_bitfield & (1 << index)) {
+            joints[index].calibrate();
+            state.calibrating.joint_bitfield &= ~(1 << index);
+            break;
+          }
+        }
+      }
+    } break;
+
+    // In the STOPPING, MOVE_TO, and MOVE_SPEED states, check if all joints are idle.
     // If so, send a done response and transition to the IDLE state.
     case CobotState::STOPPING:
-    case CobotState::CALIBRATING:
     case CobotState::MOVE_TO:
     case CobotState::MOVE_SPEED: {
       bool all_stopped = true;
-      for (auto joint : joints) {
+      for (auto& joint : joints) {
         if (joint.get_state()->id != Joint::State::IDLE) {
           all_stopped = false;
           break;
