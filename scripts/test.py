@@ -5,6 +5,8 @@ import fb.CobotMsgs.Request.Init as Init
 import fb.CobotMsgs.Request.Calibrate as Calibrate
 import fb.CobotMsgs.Request.GoHome as GoHome
 import fb.CobotMsgs.Request.RequestPayload as RequestPayload
+import fb.CobotMsgs.Request.MoveTo as MoveTo
+import fb.CobotMsgs.Request.MoveToEntry as MoveToEntry
 import serial
 
 CRC_TABLE = [
@@ -36,9 +38,6 @@ uuid = 0
 
 def frame_msg(msg):
   header = [0x24, len(msg) & 0xFF, crc8ccitt(msg) & 0xFF]
-  print(header)
-  print(msg)
-  print(len(msg))
   return bytes(header) + msg
 
 def gen_init_msg(fw_version):
@@ -90,20 +89,49 @@ def gen_home(bitfield):
   builder.Finish(incoming_message)
   return builder.Output()
 
+def gen_move_to(entries):
+  builder = flatbuffers.Builder()
+  entries_list = []
+  for entry in entries:
+    entries_list.append(MoveToEntry.CreateMoveToEntry(builder, entry[0], entry[1], entry[2]))
+  MoveTo.StartEntriesVector(builder, len(entries_list))
+  for entry in reversed(entries_list):
+    builder.PrependUOffsetTRelative(entry)
+  entries = builder.EndVector()
+  MoveTo.Start(builder)
+  MoveTo.AddEntries(builder, entries)
+  move_to_msg = MoveTo.End(builder)
+  Request.Start(builder)
+  Request.AddMessageId(builder, uuid)
+  Request.AddPayloadType(builder, RequestPayload.RequestPayload().MoveTo)
+  Request.AddPayload(builder, move_to_msg)
+  request = Request.End(builder)
+  IncomingMessage.Start(builder)
+  IncomingMessage.AddPayload(builder, request)
+  incoming_message = IncomingMessage.End(builder)
+  builder.Finish(incoming_message)
+  return builder.Output()
+
+try:
+  ser = serial.Serial('COM5', 115200, timeout=1)
+except:
+  print('Failed to open serial port.')
+  ser = None
 
 while True:
 
-  # # Read all bytes from the serial port.
-  # read = ser.read_all()
-  # print()
-  # for b in read:
-  #   print(hex(b), end=' ')
-  # print()
+  # Read all bytes from the serial port.
+  if ser is not None:
+    read = ser.read_all()
+    print()
+    for b in read:
+      print(hex(b), end=' ')
+    print()
 
   # Parse a user message and execute it as a python command.
   user_input = input('>>> ')
   if user_input == '':
-    user_input = 'gen_init_msg(1)'
+    continue
   if user_input == 'exit':
     break
 
@@ -113,3 +141,7 @@ while True:
   for b in msg:
     print(hex(b)[2:].rjust(2, '0'), end=' ')
   print()
+
+  # Send the message to the serial port.
+  if ser is not None:
+    ser.write(msg)
