@@ -10,8 +10,6 @@
 
 #include <Joint.h>
 
-static const uint8_t CALIBRATION_ORDER[] = {5, 4, 3, 2, 1, 0};
-
 static Joint joints[] = {
   Joint({
     .id = 0,
