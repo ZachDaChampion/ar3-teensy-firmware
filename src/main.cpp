@@ -68,7 +68,7 @@ struct CobotState {
 #define FW_VERSION_STR "2"
 
 // The order in which joints are calibrated.
-static const uint8_t CALIBRATION_ORDER[] = {5, 4, 3, 2, 1, 0};
+static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 2, 1, 0 };
 
 //                                                                                                //
 // ======================================== Global data ========================================= //
@@ -134,6 +134,25 @@ void handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* 
     return messenger.send_error_response(request_id, CobotMsgs::ErrorCode_INVALID_JOINT,
                                          "The joints bitfield contains bits that don't "
                                          "correspond to any joints.");
+  }
+
+  // In order to safely calibrate a joint, all previous joints in the calibration order must already
+  // be calibrated. Here, we verify that all necessary joints are calibrated before starting this
+  // calibration.
+  //
+  // To do this, we iterate over the CALIBRATION_ORDER backwards. Once we encounter the first joint
+  // that we intend to calibrate, all subsequent joints should either already be calibrated or in
+  // joints_bf.
+  bool found_first = false;
+  for (size_t index = SIZE(CALIBRATION_ORDER) - 1; index >= 0; --index) {
+    bool to_calibrate = joints_bf & (1 << index);
+    bool already_calibrated = joints[index].get_is_calibrated();
+
+    if (found_first && !(to_calibrate || already_calibrated)) {
+      return messenger.send_error_response(state.msg_id, CobotMsgs::ErrorCode_NOT_CALIBRATED,
+                                           "Joints cannot be safely calibrated.");
+    }
+    if (to_calibrate) found_first = true;
   }
 
   // If we are interrupting an active process, respond to it with an error.
