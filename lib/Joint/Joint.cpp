@@ -15,7 +15,7 @@ Joint::Joint(JointConfig config)
   this->motor_deg_per_step = 360.0 / ((float)config.motor_steps_per_rev * config.motor_reduction);
   this->enc_ticks_per_step = (float)config.enc_ticks_per_rev / (float)config.motor_steps_per_rev;
 
-  this->stepper.setMinPulseWidth(5);  // VERY IMPORTANT, THIS TOOK FUCKING HOURS TO FIGURE OUT
+  this->stepper.setMinPulseWidth(10);  // VERY IMPORTANT, THIS TOOK FUCKING HOURS TO FIGURE OUT
   this->stepper.setMaxSpeed(config.max_speed / motor_deg_per_step);
   this->stepper.setAcceleration(config.max_accel / motor_deg_per_step);
 }
@@ -40,10 +40,13 @@ float Joint::get_speed()
   return measured_speed;
 }
 
-void Joint::move_to_auto(float target)
+void Joint::move_to_auto(int32_t target)
 {
+  Serial.println("In function");
+  Serial.flush();
+  float target_f = target * 0.001f;
   state.id = State::MOVE_TO_AUTO;
-  state.data.move_to_auto.target_steps = config.direction * target / motor_deg_per_step;
+  state.data.move_to_auto.target_steps = config.direction * target_f / motor_deg_per_step;
 
   // Limit the target position to the range of the joint.
   if (state.data.move_to_auto.target_steps < config.min_steps)
@@ -54,10 +57,11 @@ void Joint::move_to_auto(float target)
   stepper.moveTo(state.data.move_to_auto.target_steps);
 }
 
-void Joint::move_to_speed(float target, float speed)
+void Joint::move_to_speed(int32_t target, int32_t speed)
 {
+  float target_f = target * 0.001f;
   state.id = State::MOVE_TO_SPEED;
-  state.data.move_to_speed.target_steps = config.direction * target / motor_deg_per_step;
+  state.data.move_to_speed.target_steps = config.direction * target_f / motor_deg_per_step;
   state.data.move_to_speed.speed = speed / motor_deg_per_step;
 
   // Limit the target position to the range of the joint.
@@ -75,10 +79,11 @@ void Joint::move_to_speed(float target, float speed)
   stepper.setSpeed(state.data.move_to_speed.speed);
 }
 
-void Joint::move_forever_speed(float speed)
+void Joint::move_forever_speed(int32_t speed)
 {
+  float speed_f = speed * 0.001f;
   state.id = State::MOVE_FOREVER_SPEED;
-  state.data.move_forever_speed.speed = config.direction * speed / motor_deg_per_step;
+  state.data.move_forever_speed.speed = config.direction * speed_f / motor_deg_per_step;
 
   // Limit the speed to between -max_speed and max_speed.
   if (state.data.move_forever_speed.speed < -config.max_speed)
@@ -103,12 +108,8 @@ void Joint::stop(bool smooth)
 void Joint::calibrate()
 {
   state.id = State::CALIBRATING;
+  state.data.calibrate.has_hit_limit_switch = false;
   stepper.setSpeed(config.calibration_speed / motor_deg_per_step);
-  Serial.print("Calibrating joint ");
-  Serial.print(config.id);
-  Serial.print(" at ");
-  Serial.print(config.calibration_speed / motor_deg_per_step);
-  Serial.println(" steps/s");
 }
 
 bool Joint::get_is_calibrated()
@@ -116,22 +117,25 @@ bool Joint::get_is_calibrated()
   return is_calibrated;
 }
 
-void Joint::override_position(float position)
+void Joint::override_position(int32_t position)
 {
+  float position_f = position * 0.001f;
   state.id = State::IDLE;
   is_calibrated = true;
-  stepper.setCurrentPosition(position / motor_deg_per_step);
+  stepper.setCurrentPosition(position_f / motor_deg_per_step);
 }
 
-bool Joint::position_within_range(float position)
+bool Joint::position_within_range(int32_t position)
 {
-  return (position >= config.min_steps * motor_deg_per_step) &&
-         (position <= config.max_steps * motor_deg_per_step);
+  float position_f = position * 0.001f;
+  return (position_f >= config.min_steps * motor_deg_per_step) &&
+         (position_f <= config.max_steps * motor_deg_per_step);
 }
 
-bool Joint::speed_within_range(float speed)
+bool Joint::speed_within_range(int32_t speed)
 {
-  return (speed >= -config.max_speed) && (speed <= config.max_speed);
+  float speed_f = speed * 0.001f;
+  return (speed_f >= -config.max_speed) && (speed_f <= config.max_speed);
 }
 
 void Joint::reset()
@@ -163,14 +167,23 @@ void Joint::update()
       break;
 
     case State::CALIBRATING: {
-      if (limit_switch.read() && limit_switch.read_interval(1, 100)) {
-        stepper.setCurrentPosition(config.ref_steps);
-        encoder.write(config.ref_steps * enc_ticks_per_step);
-        is_calibrated = true;
-        state.id = State::IDLE;
-        stepper.setSpeed(0);
+      if (state.data.calibrate.has_hit_limit_switch) {
+        if (!stepper.isRunning()) {
+          state.id = State::IDLE;
+          is_calibrated = true;
+          stepper.setSpeed(0);
+          break;
+        }
+        stepper.run();
+      } else {
+        if (limit_switch.read() && limit_switch.read_interval(1, 100)) {
+          stepper.setCurrentPosition(config.ref_steps);
+          encoder.write(config.ref_steps * enc_ticks_per_step);
+          stepper.moveTo(config.goto_after_calibrate);
+          state.data.calibrate.has_hit_limit_switch = true;
+        }
+        stepper.runSpeed();
       }
-      stepper.runSpeed();
 
     } break;
 
@@ -207,10 +220,11 @@ void Joint::update()
    */
 
   int32_t encoder_pos = encoder.read();
-  float dt = micros_timer / 1000000.0;
+  float dt = micros_timer / 1000000.0f;
+  if (dt == 0) return;
   micros_timer = 0;
 
-  float unfiltered_speed = (dt == 0) ? 0 : (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
+  float unfiltered_speed = (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
   float scaled_filter_strength = config.speed_filter_strength * dt;
 
   if (scaled_filter_strength >= 1) {
@@ -221,17 +235,17 @@ void Joint::update()
   }
   last_encoder_pos = encoder_pos;
 
-  if (print_timer > 100) {
-    print_timer = 0;
-    if (config.id == 5) {
-      Serial.print("j ");
-      Serial.print(config.id);
-      Serial.print(", s ");
-      Serial.print(stepper.currentPosition());
-      Serial.print(", e ");
-      Serial.print(encoder_pos);
-      Serial.print(", r ");
-      Serial.println(enc_ticks_per_step);
-    }
-  }
+  // if (print_timer > 100) {
+  //   print_timer = 0;
+  //   if (config.id == 5) {
+  //     Serial.print("j ");
+  //     Serial.print(config.id);
+  //     Serial.print(", s ");
+  //     Serial.print(stepper.currentPosition());
+  //     Serial.print(", e ");
+  //     Serial.print(encoder_pos);
+  //     Serial.print(", r ");
+  //     Serial.println(enc_ticks_per_step);
+  //   }
+  // }
 }

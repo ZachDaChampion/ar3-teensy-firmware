@@ -18,6 +18,8 @@ static Joint joints[] = {
     .min_steps = -7477,
     .max_steps = 4600,
     .ref_steps = -7477,
+    
+    .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 2048,
@@ -48,6 +50,8 @@ static Joint joints[] = {
     .min_steps = -2397,
     .max_steps = 2120,
     .ref_steps = -2397,
+    
+    .goto_after_calibrate = -2000,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 2048,
@@ -78,6 +82,8 @@ static Joint joints[] = {
     .min_steps = -6000,
     .max_steps = 7506,
     .ref_steps = 7506,
+    
+    .goto_after_calibrate = 3500,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 2048,
@@ -108,6 +114,8 @@ static Joint joints[] = {
     .min_steps = -6000,
     .max_steps = 7046,
     .ref_steps = 7046,
+    
+    .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 2048,
@@ -133,11 +141,13 @@ static Joint joints[] = {
   
   Joint({
     .id = 4,
-    .name = "forearm roll",
+    .name = "wrist roll",
 
     .min_steps = -1958,
     .max_steps = 1958,
     .ref_steps = -1958,
+    
+    .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 800,
     .enc_ticks_per_rev = 2048,
@@ -163,11 +173,13 @@ static Joint joints[] = {
   
   Joint({
     .id = 5,
-    .name = "forearm pitch",
+    .name = "wrist pitch",
 
     .min_steps = -3000,
     .max_steps = 3250,
     .ref_steps = 3250,
+    
+    .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 2048,

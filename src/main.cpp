@@ -19,6 +19,11 @@
 #include <framing.h>
 #include <Messenger.h>
 
+#if DEBUGGING
+#include "TeensyDebug.h"
+#pragma GCC optimize("O0")
+#endif
+
 #if COBOT_ID == 0
 #include "joints-cobot0.cpp"
 #endif
@@ -68,7 +73,7 @@ struct CobotState {
 #define FW_VERSION_STR "2"
 
 // The order in which joints are calibrated.
-static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 2, 1, 0 };
+static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
 
 //                                                                                                //
 // ======================================== Global data ========================================= //
@@ -144,7 +149,8 @@ void handle_calibrate(uint32_t request_id, const CobotMsgs::Request::Calibrate* 
   // that we intend to calibrate, all subsequent joints should either already be calibrated or in
   // joints_bf.
   bool found_first = false;
-  for (size_t index = SIZE(CALIBRATION_ORDER) - 1; index >= 0; --index) {
+  for (int i = SIZE(CALIBRATION_ORDER) - 1; i >= 0; --i) {
+    auto index = CALIBRATION_ORDER[i];
     bool to_calibrate = joints_bf & (1 << index);
     bool already_calibrated = joints[index].get_is_calibrated();
 
@@ -355,15 +361,16 @@ void handle_move_to(uint32_t request_id, const CobotMsgs::Request::MoveTo* data)
   }
 
   // Move all specified joints to their target positions.
-  for (size_t i = 0; i < entries->size(); ++i) {
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
     if (map[i] != -1) {
       auto entry = entries->Get(map[i]);
-      if (entry->speed() == 0)
-        joints[i].move_to_auto(entry->angle());
-      else
-        joints[i].move_to_speed(entry->angle(), entry->speed());
-    } else {
-      joints[i].stop(false);
+      int32_t speed = entry->speed();
+      delay(1);
+      int32_t angle = entry->angle();
+      if (speed == 0) {
+        joints[i].move_to_auto(angle);
+      } else
+        joints[i].move_to_speed(angle, speed);
     }
   }
 
@@ -434,12 +441,10 @@ void handle_move_speed(uint32_t request_id, const CobotMsgs::Request::MoveSpeed*
   }
 
   // Move all specified joints at their target speeds.
-  for (size_t i = 0; i < entries->size(); ++i) {
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
     if (map[i] != -1) {
       auto entry = entries->Get(map[i]);
       joints[i].move_forever_speed(entry->speed());
-    } else {
-      joints[i].stop(false);
     }
   }
 
@@ -588,6 +593,11 @@ void setup()
   // Start serial communication.
   Serial.begin(115200);
 
+#if DEBUGGING
+  // Start debug serial communication.
+  debug.begin(SerialUSB1);
+#endif
+
   // Initialize the joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].init();
@@ -612,7 +622,7 @@ void loop()
     // state.
     case CobotState::CALIBRATING: {
       // Check if any joints are actively calibrating.
-      bool all_stopped = false;
+      bool all_stopped = true;
       for (auto& joint : joints) {
         if (joint.get_state()->id == Joint::State::CALIBRATING) {
           all_stopped = false;
@@ -683,18 +693,11 @@ void loop()
     return;
   }
 
-  Serial.println("Message received");
-  Serial.println(msg_len);
-
   // Parse the message as a request.
   auto incoming_msg = flatbuffers::GetRoot<CobotMsgs::IncomingMessage>(serial_buffer_in + 3);
   auto request = incoming_msg->payload();
   auto request_type = request->payload_type();
   auto request_id = request->message_id();
-
-  Serial.println("Request received");
-  Serial.println(request_id);
-  Serial.println(request_type);
 
   // Handle the request.
   switch (request_type) {

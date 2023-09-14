@@ -5,7 +5,17 @@
     "*.tcc": "cpp",
     "string_view": "cpp",
     "array": "cpp",
-    "random": "cpp"
+    "random": "cpp",
+    "cmath": "cpp",
+    "deque": "cpp",
+    "forward_list": "cpp",
+    "list": "cpp",
+    "string": "cpp",
+    "unordered_map": "cpp",
+    "unordered_set": "cpp",
+    "vector": "cpp",
+    "initializer_list": "cpp",
+    "span": "cpp"
   },
   "[python]": {
     "editor.defaultFormatter": "ms-python.autopep8"

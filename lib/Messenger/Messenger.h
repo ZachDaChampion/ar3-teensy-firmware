@@ -98,6 +98,9 @@ public:
     int written = framing::frame_message(
       this->out_buffer, BUFFER_SIZE, this->builder->GetBufferPointer(), this->builder->GetSize());
     if (written > 0) Serial.write(this->out_buffer, written);
+    else {
+      Serial.println("Failed to write done response");
+    }
   }
 
   /**

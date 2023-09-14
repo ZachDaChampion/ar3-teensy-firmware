@@ -18,9 +18,12 @@ struct JointConfig {
   uint8_t id;        // ID of the joint (0-5)
   const char* name;  // Name of the joint
 
-  long min_steps;  // Most negative position of the joint (in steps)
-  long max_steps;  // Most positive position of the joint (in steps)
-  long ref_steps;  // Position of the joint when it touches the limit switch (in steps)
+  int32_t min_steps;  // Most negative position of the joint (in steps)
+  int32_t max_steps;  // Most positive position of the joint (in steps)
+  int32_t ref_steps;  // Position of the joint when it touches the limit switch (in steps)
+
+  int32_t goto_after_calibrate;  // Position of the joint to go to after calibration (in steps). This
+                              // is included in the joint's calibration procedure.
 
   int motor_steps_per_rev;  // Number of steps per revolution of the stepper motor
   int enc_ticks_per_rev;    // Number of ticks per revolution of the encoder
@@ -45,7 +48,7 @@ struct JointConfig {
 
   float speed_filter_strength;  // Strength of the speed filter (percent of new speed per second)
 
-  uint8_t lim_pin;             // Limit switch pin
+  uint8_t lim_pin;  // Limit switch pin
 };
 
 /**
@@ -72,11 +75,15 @@ public:
     // Data dependent on the state.
     union {
       struct {
-        long target_steps;  // The target position of the joint (in steps)
+        bool has_hit_limit_switch;  // Whether or not the joint has hit the limit switch
+      } calibrate;
+
+      struct {
+        int32_t target_steps;  // The target position of the joint (in steps)
       } move_to_auto;
 
       struct {
-        long target_steps;  // The target position of the joint (in steps)
+        int32_t target_steps;  // The target position of the joint (in steps)
         float speed;        // The speed of the joint (in steps per second)
       } move_to_speed;
 
@@ -125,22 +132,22 @@ public:
    *
    * @param[in] target The target position of the joint (in degrees).
    */
-  void move_to_auto(float target);
+  void move_to_auto(int32_t target);
 
   /**
    * Begin moving the joint to a position with a specified speed.
    *
-   * @param[in] target The target position of the joint (in degrees).
-   * @param[in] speed The speed of the joint (in degrees per second) (positive).
+   * @param[in] target The target position of the joint (in degrees * 10^3).
+   * @param[in] speed The speed of the joint (in degrees * 10^3 per second) (positive).
    */
-  void move_to_speed(float target, float speed);
+  void move_to_speed(int32_t target, int32_t speed);
 
   /**
    * Begin moving the joint indefinitely at a specified speed.
    *
-   * @param[in] speed The speed of the joint (in degrees per second).
+   * @param[in] speed The speed of the joint (in degrees * 10^3 per second).
    */
-  void move_forever_speed(float speed);
+  void move_forever_speed(int32_t speed);
 
   /**
    * Stop the joint.
@@ -164,25 +171,25 @@ public:
   /**
    * Override the current position of the joint. This will mark the joint as calibrated.
    *
-   * @param[in] position The new position of the joint (in degrees).
+   * @param[in] position The new position of the joint (in degrees * 10^3).
    */
-  void override_position(float position);
+  void override_position(int32_t position);
 
   /**
    * Determine whether or not a position is within the range of the joint.
-   * 
-   * @param[in] position The position to check (in degrees).
+   *
+   * @param[in] position The position to check (in degrees * 10^3).
    * @return Whether or not the position is within the range of the joint.
    */
-  bool position_within_range(float position);
+  bool position_within_range(int32_t position);
 
   /**
    * Determine whether or not a speed is within the range of the joint.
-   * 
-   * @param[in] speed The speed to check (in degrees per second).
+   *
+   * @param[in] speed The speed to check (in degrees * 10^3 per second).
    * @return Whether or not the speed is within the range of the joint.
    */
-  bool speed_within_range(float speed);
+  bool speed_within_range(int32_t speed);
 
   /**
    * Reset the joint. This will stop the joint immediateyl and mark it as uncalibrated.

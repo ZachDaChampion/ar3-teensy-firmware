@@ -165,7 +165,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) OverrideEntry FLATBUFFERS_FINAL_CLASS {
  private:
   uint8_t joint_id_;
   int8_t padding0__;  int16_t padding1__;
-  float angle_;
+  int32_t angle_;
 
  public:
   OverrideEntry()
@@ -176,7 +176,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) OverrideEntry FLATBUFFERS_FINAL_CLASS {
     (void)padding0__;
     (void)padding1__;
   }
-  OverrideEntry(uint8_t _joint_id, float _angle)
+  OverrideEntry(uint8_t _joint_id, int32_t _angle)
       : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
         padding0__(0),
         padding1__(0),
@@ -187,7 +187,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) OverrideEntry FLATBUFFERS_FINAL_CLASS {
   uint8_t joint_id() const {
     return ::flatbuffers::EndianScalar(joint_id_);
   }
-  float angle() const {
+  int32_t angle() const {
     return ::flatbuffers::EndianScalar(angle_);
   }
 };
@@ -197,8 +197,8 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveToEntry FLATBUFFERS_FINAL_CLASS {
  private:
   uint8_t joint_id_;
   int8_t padding0__;  int16_t padding1__;
-  float angle_;
-  float speed_;
+  int32_t angle_;
+  int32_t speed_;
 
  public:
   MoveToEntry()
@@ -210,7 +210,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveToEntry FLATBUFFERS_FINAL_CLASS {
     (void)padding0__;
     (void)padding1__;
   }
-  MoveToEntry(uint8_t _joint_id, float _angle, float _speed)
+  MoveToEntry(uint8_t _joint_id, int32_t _angle, int32_t _speed)
       : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
         padding0__(0),
         padding1__(0),
@@ -222,10 +222,10 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveToEntry FLATBUFFERS_FINAL_CLASS {
   uint8_t joint_id() const {
     return ::flatbuffers::EndianScalar(joint_id_);
   }
-  float angle() const {
+  int32_t angle() const {
     return ::flatbuffers::EndianScalar(angle_);
   }
-  float speed() const {
+  int32_t speed() const {
     return ::flatbuffers::EndianScalar(speed_);
   }
 };
@@ -235,7 +235,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveSpeedEntry FLATBUFFERS_FINAL_CLASS {
  private:
   uint8_t joint_id_;
   int8_t padding0__;  int16_t padding1__;
-  float speed_;
+  int32_t speed_;
 
  public:
   MoveSpeedEntry()
@@ -246,7 +246,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveSpeedEntry FLATBUFFERS_FINAL_CLASS {
     (void)padding0__;
     (void)padding1__;
   }
-  MoveSpeedEntry(uint8_t _joint_id, float _speed)
+  MoveSpeedEntry(uint8_t _joint_id, int32_t _speed)
       : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
         padding0__(0),
         padding1__(0),
@@ -257,7 +257,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) MoveSpeedEntry FLATBUFFERS_FINAL_CLASS {
   uint8_t joint_id() const {
     return ::flatbuffers::EndianScalar(joint_id_);
   }
-  float speed() const {
+  int32_t speed() const {
     return ::flatbuffers::EndianScalar(speed_);
   }
 };

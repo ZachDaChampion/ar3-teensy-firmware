@@ -89,14 +89,11 @@ def gen_home(bitfield):
   builder.Finish(incoming_message)
   return builder.Output()
 
-def gen_move_to(entries):
+def gen_move_to(entries_list):
   builder = flatbuffers.Builder()
-  entries_list = []
-  for entry in entries:
-    entries_list.append(MoveToEntry.CreateMoveToEntry(builder, entry[0], entry[1], entry[2]))
   MoveTo.StartEntriesVector(builder, len(entries_list))
   for entry in reversed(entries_list):
-    builder.PrependUOffsetTRelative(entry)
+    MoveToEntry.CreateMoveToEntry(builder, entry[0], entry[1], entry[2])
   entries = builder.EndVector()
   MoveTo.Start(builder)
   MoveTo.AddEntries(builder, entries)
@@ -110,22 +107,24 @@ def gen_move_to(entries):
   IncomingMessage.AddPayload(builder, request)
   incoming_message = IncomingMessage.End(builder)
   builder.Finish(incoming_message)
+
   return builder.Output()
 
 try:
   ser = serial.Serial('COM5', 115200, timeout=1)
 except:
-  print('Failed to open serial port.')
-  ser = None
+  try:
+    ser = serial.Serial('COM8', 115200, timeout=1)
+  except:
+    print('Failed to open serial port.')
+    ser = None
 
 while True:
 
   # Read all bytes from the serial port.
   if ser is not None:
     read = ser.read_all()
-    print()
-    for b in read:
-      print(hex(b), end=' ')
+    print(read)
     print()
 
   # Parse a user message and execute it as a python command.
@@ -140,6 +139,7 @@ while True:
   # Print each byte of the message.
   for b in msg:
     print(hex(b)[2:].rjust(2, '0'), end=' ')
+  print()
   print()
 
   # Send the message to the serial port.

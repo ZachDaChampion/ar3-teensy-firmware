@@ -101,7 +101,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) JointsEntry FLATBUFFERS_FINAL_CLASS {
  private:
   uint8_t joint_id_;
   int8_t padding0__;  int16_t padding1__;
-  float angle_;
+  int32_t angle_;
 
  public:
   JointsEntry()
@@ -112,7 +112,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) JointsEntry FLATBUFFERS_FINAL_CLASS {
     (void)padding0__;
     (void)padding1__;
   }
-  JointsEntry(uint8_t _joint_id, float _angle)
+  JointsEntry(uint8_t _joint_id, int32_t _angle)
       : joint_id_(::flatbuffers::EndianScalar(_joint_id)),
         padding0__(0),
         padding1__(0),
@@ -123,7 +123,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) JointsEntry FLATBUFFERS_FINAL_CLASS {
   uint8_t joint_id() const {
     return ::flatbuffers::EndianScalar(joint_id_);
   }
-  float angle() const {
+  int32_t angle() const {
     return ::flatbuffers::EndianScalar(angle_);
   }
 };
