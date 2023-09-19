@@ -368,6 +368,15 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     }
   }
 
+  // Make sure all joints are calibrated.
+  for (size_t i = 0; i < entry_count; ++i) {
+    if (map[i] == -1) continue;
+    if (!joints[i].get_is_calibrated()) {
+      return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
+                                           "Some joints are not calibrated.");
+    }
+  }
+
   // If we are interrupting an active process, respond to it with an error.
   if (state.id != CobotState::IDLE) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
@@ -758,6 +767,11 @@ void loop()
   }
   uint8_t msg_payload_len = msg_len - 5;
   const uint8_t* msg = serial_buffer_in + (serial_buffer_in_len - msg_len);
+  Serial.print(serial_buffer_in_len);
+  Serial.print("  ");
+  Serial.print(msg_len);
+  Serial.print("  ");
+  Serial.println(msg[0]);
   uint8_t request_type = msg[0];
   int32_t request_id;
   deserialize_int32(&request_id, msg + 1);

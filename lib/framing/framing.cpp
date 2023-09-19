@@ -43,7 +43,7 @@ int check_message(const uint8_t* buffer, size_t buffer_len)
   uint8_t crc = crc8ccitt(buffer + 3, msg_len);
   if (crc != buffer[2]) return -1;
 
-  return msg_len + 3;
+  return msg_len;
 }
 
 int remove_frame(uint8_t* buffer, size_t buffer_len)

@@ -1,15 +1,7 @@
 COM_PORT = 'COM5'
 
-import flatbuffers
-import fb.CobotMsgs.IncomingMessage as IncomingMessage
-import fb.CobotMsgs.Request.Request as Request
-import fb.CobotMsgs.Request.Init as Init
-import fb.CobotMsgs.Request.Calibrate as Calibrate
-import fb.CobotMsgs.Request.GoHome as GoHome
-import fb.CobotMsgs.Request.RequestPayload as RequestPayload
-import fb.CobotMsgs.Request.MoveTo as MoveTo
-import fb.CobotMsgs.Request.MoveToEntry as MoveToEntry
 import serial
+import struct
 
 CRC_TABLE = [
   0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15, 0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D,
@@ -43,74 +35,34 @@ def frame_msg(msg):
   return bytes(header) + msg
 
 def send_init(fw_version):
-  builder = flatbuffers.Builder()
-  Init.Start(builder)
-  Init.AddExpectedFwVersion(builder, fw_version)
-  init_msg = Init.End(builder)
-  Request.Start(builder)
-  Request.AddMessageId(builder, uuid)
-  Request.AddPayloadType(builder, RequestPayload.RequestPayload().Init)
-  Request.AddPayload(builder, init_msg)
-  request = Request.End(builder)
-  IncomingMessage.Start(builder)
-  IncomingMessage.AddPayload(builder, request)
-  incoming_message = IncomingMessage.End(builder)
-  builder.Finish(incoming_message)
-  return builder.Output()
+  global uuid
+  id = uuid
+  uuid += 1
+  return b'\x00' + struct.pack('<I', id) + struct.pack('<I', fw_version)
 
 def send_calibrate(bitfield):
-  builder = flatbuffers.Builder()
-  Calibrate.Start(builder)
-  Calibrate.AddJointsBitfield(builder, bitfield)
-  calibrate_msg = Calibrate.End(builder)
-  Request.Start(builder)
-  Request.AddMessageId(builder, uuid)
-  Request.AddPayloadType(builder, RequestPayload.RequestPayload().Calibrate)
-  Request.AddPayload(builder, calibrate_msg)
-  request = Request.End(builder)
-  IncomingMessage.Start(builder)
-  IncomingMessage.AddPayload(builder, request)
-  incoming_message = IncomingMessage.End(builder)
-  builder.Finish(incoming_message)
-  return builder.Output()
+  global uuid
+  id = uuid
+  uuid += 1
+  return b'\x01' + struct.pack('<I', id) + struct.pack('B', bitfield)
 
 
 def send_home(bitfield):
-  builder = flatbuffers.Builder()
-  GoHome.Start(builder)
-  GoHome.AddJointsBitfield(builder, bitfield)
-  go_home_msg = GoHome.End(builder)
-  Request.Start(builder)
-  Request.AddMessageId(builder, uuid)
-  Request.AddPayloadType(builder, RequestPayload.RequestPayload().GoHome)
-  Request.AddPayload(builder, go_home_msg)
-  request = Request.End(builder)
-  IncomingMessage.Start(builder)
-  IncomingMessage.AddPayload(builder, request)
-  incoming_message = IncomingMessage.End(builder)
-  builder.Finish(incoming_message)
-  return builder.Output()
+  global uuid
+  id = uuid
+  uuid += 1
+  return b'\x07' + struct.pack('<I', id) + struct.pack('B', bitfield)
 
 def send_move_to(entries_list):
-  builder = flatbuffers.Builder()
-  MoveTo.StartEntriesVector(builder, len(entries_list))
-  for entry in reversed(entries_list):
-    MoveToEntry.CreateMoveToEntry(builder, entry[0], entry[1], entry[2])
-  entries = builder.EndVector()
-  MoveTo.Start(builder)
-  MoveTo.AddEntries(builder, entries)
-  move_to_msg = MoveTo.End(builder)
-  Request.Start(builder)
-  Request.AddMessageId(builder, uuid)
-  Request.AddPayloadType(builder, RequestPayload.RequestPayload().MoveTo)
-  Request.AddPayload(builder, move_to_msg)
-  request = Request.End(builder)
-  IncomingMessage.Start(builder)
-  IncomingMessage.AddPayload(builder, request)
-  incoming_message = IncomingMessage.End(builder)
-  builder.Finish(incoming_message)
-
-  return builder.Output()
+  global uuid
+  id = uuid
+  uuid += 1
+  ret = b'\x04' + struct.pack('<I', id)
+  for entry in entries_list:
+    ret += struct.pack('B', entry[0])
+    ret += struct.pack('<I', entry[1])
+    ret += struct.pack('<I', entry[2])
+  return ret
 
 try:
   ser = serial.Serial(COM_PORT, 115200, timeout=1)

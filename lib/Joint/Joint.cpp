@@ -42,8 +42,6 @@ float Joint::get_speed()
 
 void Joint::move_to_auto(int32_t target)
 {
-  Serial.println("In function");
-  Serial.flush();
   float target_f = target * 0.001f;
   state.id = State::MOVE_TO_AUTO;
   state.data.move_to_auto.target_steps = config.direction * target_f / motor_deg_per_step;
