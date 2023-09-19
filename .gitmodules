@@ -1,6 +1,3 @@
-[submodule "messages"]
-	path = messages
-	url = git@github.com:COBOT-Team/firmware-messages.git
 [submodule "lib/TeensyDebug"]
 	path = lib/TeensyDebug
 	url = git@github.com:ftrias/TeensyDebug.git

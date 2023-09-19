@@ -15,7 +15,7 @@ Joint::Joint(JointConfig config)
   this->motor_deg_per_step = 360.0 / ((float)config.motor_steps_per_rev * config.motor_reduction);
   this->enc_ticks_per_step = (float)config.enc_ticks_per_rev / (float)config.motor_steps_per_rev;
 
-  this->stepper.setMinPulseWidth(10);  // VERY IMPORTANT, THIS TOOK FUCKING HOURS TO FIGURE OUT
+  this->stepper.setMinPulseWidth(5);  // VERY IMPORTANT, THIS TOOK FUCKING HOURS TO FIGURE OUT
   this->stepper.setMaxSpeed(config.max_speed / motor_deg_per_step);
   this->stepper.setAcceleration(config.max_accel / motor_deg_per_step);
 }

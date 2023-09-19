@@ -12,10 +12,19 @@
 
 namespace framing
 {
+int frame_message_inline(uint8_t* buffer, size_t buffer_len, uint8_t message_len)
+{
+  size_t full_msg_len = message_len + 3;
+  if (buffer_len < full_msg_len) return -1;
+  buffer[0] = START_BYTE;
+  buffer[1] = message_len;
+  buffer[2] = crc8ccitt(buffer + 3, message_len);
+  return full_msg_len;
+}
 
 int frame_message(uint8_t* dest, size_t dest_len, const uint8_t* src, uint8_t src_len)
 {
-  if (dest_len < src_len + 3) return -1;
+  if (dest_len < src_len + 3u) return -1;
   dest[0] = START_BYTE;
   dest[1] = src_len;
   dest[2] = crc8ccitt(src, src_len);
@@ -41,7 +50,7 @@ int remove_frame(uint8_t* buffer, size_t buffer_len)
 {
   if (buffer_len < 3) return 0;
   uint8_t msg_len = buffer[1];
-  if (buffer_len < msg_len + 3) return 0;
+  if (buffer_len < msg_len + 3u) return 0;
   memmove(buffer, buffer + msg_len + 3, buffer_len - msg_len - 3);
   return buffer_len - msg_len - 3;
 }

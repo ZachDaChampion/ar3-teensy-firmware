@@ -18,6 +18,18 @@ namespace framing
 {
 
 /**
+ * Frame a message within an existing buffer. This will add the start byte, length, and checksum
+ * before the message. The rest of the buffer will be unchanged. Make sure there are 3 empty bytes
+ * before the message in the buffer.
+ *
+ * @param[out] buffer The buffer to write the framed message to.
+ * @param[in] buffer_len The length of the buffer.
+ * @param[in] message_len The length of the message (not including the framing bytes).
+ * @return The length of the framed message, or -1 if the message is too long to fit in the buffer.
+ */
+int frame_message_inline(uint8_t* buffer, size_t buffer_len, uint8_t message_len);
+
+/**
  * Frame a message to be sent over the serial port. This will add the start byte, length, and
  * checksum.
  *

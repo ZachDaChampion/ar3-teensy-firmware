@@ -10,6 +10,7 @@ import fb.CobotMsgs.Request.RequestPayload as RequestPayload
 import fb.CobotMsgs.Request.MoveTo as MoveTo
 import fb.CobotMsgs.Request.MoveToEntry as MoveToEntry
 import serial
+import time
 
 CRC_TABLE = [
   0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15, 0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D,
@@ -112,38 +113,50 @@ def send_move_to(entries_list):
 
   return builder.Output()
 
+port = input('Enter COM port: ')
+
 try:
-  ser = serial.Serial(COM_PORT, 115200, timeout=1)
+  ser = serial.Serial(port, 115200, timeout=1)
 except:
-  try:
-    ser = serial.Serial('COM8', 115200, timeout=1)
-  except:
-    print('Failed to open serial port.')
-    ser = None
+  print('Failed to open serial port.')
+  ser = None
 
-while True:
 
-  # Read all bytes from the serial port.
-  if ser is not None:
-    read = ser.read_all()
-    print(read)
+if ser is not None:
+  print("Initializing...")
+  ser.write(frame_msg(send_init(2)))
+
+
+  while True:
+    time.sleep(.1)
+
+    received = ser.read_all()
+    print()
+    print("RECIEVED: ", received)
     print()
 
-  # Parse a user message and execute it as a python command.
-  user_input = input('>>> ')
-  if user_input == '':
-    continue
-  if user_input == 'exit':
-    break
+    print("""
+====================================
 
-  exec(f'msg = frame_msg({user_input})')
+CALIBRATE JOINTS
+ENTER A NUMBER FROM 0 TO 5 TO CALIBRATE A JOINT
 
-  # Print each byte of the message.
-  for b in msg:
-    print(hex(b)[2:].rjust(2, '0'), end=' ')
-  print()
-  print()
+  5: WRIST ROLL
+  4: WRIST PITCH
+  3: FOREARM ROLL
+  1: SHOULDER
+  2: ELBOW
+  0: BASE
 
-  # Send the message to the serial port.
-  if ser is not None:
-    ser.write(msg)
+JOINTS MUST BE CALIBRATED IN THE ORDER LISTED ABOVE. CALIBRATING A JOINT OUT OF ORDER WILL NOT WORK.
+
+TYPE "exit" TO EXIT
+
+>>> """, end='')
+
+    user_input = input()
+    if user_input == '':
+      continue
+    if user_input == 'exit':
+      break
+    ser.write(frame_msg(send_calibrate(1 << int(user_input))))
