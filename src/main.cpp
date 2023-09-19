@@ -697,7 +697,7 @@ void loop()
       }
 
       // If all joints are calibrated, send a done response and transition to the IDLE state.
-      if (state.calibrating.joint_bitfield == 0) {
+      if (all_stopped && state.calibrating.joint_bitfield == 0) {
         messenger.send_done(state.msg_id);
         state.id = CobotState::IDLE;
         state.msg_id = 0;
