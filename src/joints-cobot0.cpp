@@ -29,8 +29,8 @@ static Joint joints[] = {
 
     .direction = -1,
 
-    .max_speed = 20.0,
-    .max_accel = 10.0,
+    .max_speed = 80.0,
+    .max_accel = 240.0,
     .calibration_speed = -10.0,
 
     .step_pin = 0,
@@ -48,7 +48,7 @@ static Joint joints[] = {
     .name = "shoulder",
 
     .min_steps = -2450,
-    .max_steps = 2300,
+    .max_steps = 3200,
     .ref_steps = -2450,
     
     .goto_after_calibrate = -2000,
@@ -61,8 +61,8 @@ static Joint joints[] = {
 
     .direction = -1,
 
-    .max_speed = 20.0,
-    .max_accel = 10.0,
+    .max_speed = 60.0,
+    .max_accel = 240.0,
     .calibration_speed = -5.0,
 
     .step_pin = 2,
@@ -93,8 +93,8 @@ static Joint joints[] = {
 
     .direction = 1,
 
-    .max_speed = 20.0,
-    .max_accel = 10.0,
+    .max_speed = 160.0,
+    .max_accel = 220.0,
     .calibration_speed = 5.0,
 
     .step_pin = 4,
@@ -125,8 +125,8 @@ static Joint joints[] = {
 
     .direction = 1,
 
-    .max_speed = 60.0,
-    .max_accel = 25.0,
+    .max_speed = 240.0,
+    .max_accel = 1200.0,
     .calibration_speed = 10.0,
 
     .step_pin = 6,
@@ -143,8 +143,8 @@ static Joint joints[] = {
     .id = 4,
     .name = "wrist roll",
 
-    .min_steps = -1754,
-    .max_steps = 1500,
+    .min_steps = -1800,
+    .max_steps = 1800,
     .ref_steps = -1754,
     
     .goto_after_calibrate = 0,
@@ -157,8 +157,8 @@ static Joint joints[] = {
 
     .direction = -1,
 
-    .max_speed = 40.0,
-    .max_accel = 40.0,
+    .max_speed = 200.0,
+    .max_accel = 600.0,
     .calibration_speed = -10.0,
 
     .step_pin = 8,
@@ -189,8 +189,8 @@ static Joint joints[] = {
 
     .direction = 1,
 
-    .max_speed = 40.0,
-    .max_accel = 120.0,
+    .max_speed = 1500.0,
+    .max_accel = 8000.0,
     .calibration_speed = 10.0,
 
     .step_pin = 10,

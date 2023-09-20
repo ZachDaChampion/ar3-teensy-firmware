@@ -34,26 +34,26 @@ def frame_msg(msg):
   header = [0x24, len(msg) & 0xFF, crc8ccitt(msg) & 0xFF]
   return bytes(header) + msg
 
-def send_init(fw_version):
+def init(fw_version):
   global uuid
   id = uuid
   uuid += 1
   return b'\x00' + struct.pack('<I', id) + struct.pack('<I', fw_version)
 
-def send_calibrate(bitfield):
+def calibrate(bitfield):
   global uuid
   id = uuid
   uuid += 1
   return b'\x01' + struct.pack('<I', id) + struct.pack('B', bitfield)
 
 
-def send_home(bitfield):
+def home(bitfield):
   global uuid
   id = uuid
   uuid += 1
   return b'\x07' + struct.pack('<I', id) + struct.pack('B', bitfield)
 
-def send_move_to(entries_list):
+def move_to(entries_list):
   global uuid
   id = uuid
   uuid += 1
