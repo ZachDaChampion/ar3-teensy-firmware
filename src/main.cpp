@@ -180,7 +180,19 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
 
   // Stop all joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
+    joints[i].stop(true);
+  }
+
+  // Wait for all joints to stop.
+  while (true) {
+    bool all_stopped = true;
+    for (auto& joint : joints) {
+      joint.update();
+      if (joint.get_state()->id != Joint::State::IDLE) {
+        all_stopped = false;
+      }
+    }
+    if (all_stopped) break;
   }
 
   // Set the calibrating bitfield so that the update loop knows which joints to calibrate.
@@ -250,16 +262,6 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     }
   }
 
-  // If we are interrupting an active process, respond to it with an error.
-  if (state.id != CobotState::IDLE) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by override");
-  }
-
-  // Stop all joints.
-  for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
-  }
-
   // Override the positions of all specified joints.
   for (size_t i = 0; i < entry_count; ++i) {
     const uint8_t* entry = data + (map[i] * 5);
@@ -307,9 +309,9 @@ void handle_get_joints(uint32_t request_id)
  */
 void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 {
-  if (!initialized) {
-    return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
-  }
+  // if (!initialized) {
+  //   return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
+  // }
   if (data_len % 9 != 0) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
                                          "The request data is not a multiple of 9 bytes.");
@@ -369,22 +371,17 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
 
   // Make sure all joints are calibrated.
-  for (size_t i = 0; i < entry_count; ++i) {
-    if (map[i] == -1) continue;
-    if (!joints[i].get_is_calibrated()) {
-      return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
-                                           "Some joints are not calibrated.");
-    }
-  }
+  // for (size_t i = 0; i < entry_count; ++i) {
+  //   if (map[i] == -1) continue;
+  //   if (!joints[i].get_is_calibrated()) {
+  //     return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
+  //                                          "Some joints are not calibrated.");
+  //   }
+  // }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.id != CobotState::IDLE) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
-  }
-
-  // Stop all joints immediately.
-  for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
   }
 
   // Move all specified joints to their target positions.
@@ -476,11 +473,6 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
   // If we are interrupting an active process, respond to it with an error.
   if (state.id != CobotState::IDLE) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
-  }
-
-  // Stop all joints immediately.
-  for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
   }
 
   // Move all specified joints at their target speeds.
@@ -593,9 +585,8 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by go home");
   }
 
-  // Stop all joints and move the specified joints to their home positions.
+  // Move the specified joints to their home positions.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    joints[i].stop(false);
     if (joints_bf & (1 << i)) {
       joints[i].move_to_auto(0);
     }
