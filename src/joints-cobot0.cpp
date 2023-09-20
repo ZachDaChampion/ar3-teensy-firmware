@@ -47,9 +47,9 @@ static Joint joints[] = {
     .id = 1,
     .name = "shoulder",
 
-    .min_steps = -2397,
-    .max_steps = 2120,
-    .ref_steps = -2397,
+    .min_steps = -2450,
+    .max_steps = 2300,
+    .ref_steps = -2450,
     
     .goto_after_calibrate = -2000,
 
@@ -79,9 +79,9 @@ static Joint joints[] = {
     .id = 2,
     .name = "elbow",
 
-    .min_steps = -6000,
-    .max_steps = 7506,
-    .ref_steps = 7506,
+    .min_steps = -7000,
+    .max_steps = 8056,
+    .ref_steps = 8056,
     
     .goto_after_calibrate = 3500,
 
@@ -143,9 +143,9 @@ static Joint joints[] = {
     .id = 4,
     .name = "wrist roll",
 
-    .min_steps = -1958,
-    .max_steps = 1958,
-    .ref_steps = -1958,
+    .min_steps = -1754,
+    .max_steps = 1500,
+    .ref_steps = -1754,
     
     .goto_after_calibrate = 0,
 

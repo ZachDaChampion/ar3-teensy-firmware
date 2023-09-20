@@ -578,6 +578,16 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
                                          "correspond to any joints.");
   }
 
+  // Verify that all specified joints are calibrated.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    if (joints_bf & (1 << i)) {
+      if (!joints[i].get_is_calibrated()) {
+        return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
+                                             "Some joints are not calibrated.");
+      }
+    }
+  }
+
   // If we are interrupting an active process, respond to it with an error.
   if (state.id != CobotState::IDLE) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by go home");

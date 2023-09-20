@@ -60,8 +60,8 @@ def send_move_to(entries_list):
   ret = b'\x04' + struct.pack('<I', id)
   for entry in entries_list:
     ret += struct.pack('B', entry[0])
-    ret += struct.pack('<I', entry[1])
-    ret += struct.pack('<I', entry[2])
+    ret += struct.pack('<i', entry[1])
+    ret += struct.pack('<i', entry[2])
   return ret
 
 try:
