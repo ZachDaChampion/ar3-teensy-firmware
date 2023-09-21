@@ -143,9 +143,9 @@ static Joint joints[] = {
     .id = 4,
     .name = "wrist roll",
 
-    .min_steps = -1800,
-    .max_steps = 1800,
-    .ref_steps = -1754,
+    .min_steps = -2000,
+    .max_steps = 2000,
+    .ref_steps = -1850,
     
     .goto_after_calibrate = 0,
 
