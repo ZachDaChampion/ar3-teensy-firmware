@@ -262,6 +262,15 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     }
   }
 
+  // Check that all specified joints are idle.
+  for (size_t i = 0; i < entry_count; ++i) {
+    if (map[i] == -1) continue;
+    if (joints[i].get_state()->id != Joint::State::IDLE) {
+      return messenger.send_error_response(request_id, ErrorCode::OTHER,
+                                           "Some joints are not idle.");
+    }
+  }
+
   // Override the positions of all specified joints.
   for (size_t i = 0; i < entry_count; ++i) {
     const uint8_t* entry = data + (map[i] * 5);
@@ -270,9 +279,6 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     joints[i].override_position(angle);
   }
 
-  // Set the state to IDLE and respond to the request with an ACK.
-  state.id = CobotState::IDLE;
-  state.msg_id = request_id;
   messenger.send_ack(request_id);
 }
 
