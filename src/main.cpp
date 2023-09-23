@@ -262,6 +262,15 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     }
   }
 
+  // Check that all specified joints are idle.
+  for (size_t i = 0; i < entry_count; ++i) {
+    if (map[i] == -1) continue;
+    if (joints[i].get_state()->id != Joint::State::IDLE) {
+      return messenger.send_error_response(request_id, ErrorCode::OTHER,
+                                           "Some joints are not idle.");
+    }
+  }
+
   // Override the positions of all specified joints.
   for (size_t i = 0; i < entry_count; ++i) {
     const uint8_t* entry = data + (map[i] * 5);
@@ -270,9 +279,6 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     joints[i].override_position(angle);
   }
 
-  // Set the state to IDLE and respond to the request with an ACK.
-  state.id = CobotState::IDLE;
-  state.msg_id = request_id;
   messenger.send_ack(request_id);
 }
 
@@ -309,9 +315,9 @@ void handle_get_joints(uint32_t request_id)
  */
 void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 {
-  // if (!initialized) {
-  //   return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
-  // }
+  if (!initialized) {
+    return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
+  }
   if (data_len % 9 != 0) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
                                          "The request data is not a multiple of 9 bytes.");
@@ -371,13 +377,13 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
 
   // Make sure all joints are calibrated.
-  // for (size_t i = 0; i < entry_count; ++i) {
-  //   if (map[i] == -1) continue;
-  //   if (!joints[i].get_is_calibrated()) {
-  //     return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
-  //                                          "Some joints are not calibrated.");
-  //   }
-  // }
+  for (size_t i = 0; i < entry_count; ++i) {
+    if (map[i] == -1) continue;
+    if (!joints[i].get_is_calibrated()) {
+      return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
+                                           "Some joints are not calibrated.");
+    }
+  }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.id != CobotState::IDLE) {
