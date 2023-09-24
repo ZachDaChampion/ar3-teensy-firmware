@@ -70,6 +70,7 @@ enum class Request {
   GoHome = 7,
   Reset = 8,
   SetLogLevel = 9,
+  SetFeedback = 10,
 };
 
 #define MESSAGE_SIZE (BUFFER_SIZE - 3)
