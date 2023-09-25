@@ -8,7 +8,7 @@ Joint::Joint(JointConfig config)
 {
   this->state.id = State::IDLE;
   this->is_calibrated = false;
-  this->encoder_feedback_enabled = true;
+  this->encoder_feedback_enabled = false;
   this->micros_timer = 0;
   this->print_timer = 0;
 
@@ -151,7 +151,7 @@ void Joint::reset()
 {
   state.id = State::IDLE;
   is_calibrated = false;
-  this->encoder_feedback_enabled = true;
+  encoder_feedback_enabled = false;
   stepper.setSpeed(0);
   stepper.runSpeed();
   stepper.setCurrentPosition(0);
