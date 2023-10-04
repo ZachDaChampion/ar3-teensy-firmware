@@ -22,8 +22,8 @@ struct JointConfig {
   int32_t max_steps;  // Most positive position of the joint (in steps)
   int32_t ref_steps;  // Position of the joint when it touches the limit switch (in steps)
 
-  int32_t goto_after_calibrate;  // Position of the joint to go to after calibration (in steps). This
-                              // is included in the joint's calibration procedure.
+  int32_t goto_after_calibrate;  // Position of the joint to go to after calibration (in steps).
+                                 // This is included in the joint's calibration procedure.
 
   int motor_steps_per_rev;  // Number of steps per revolution of the stepper motor
   int enc_ticks_per_rev;    // Number of ticks per revolution of the encoder
@@ -84,7 +84,7 @@ public:
 
       struct {
         int32_t target_steps;  // The target position of the joint (in steps)
-        float speed;        // The speed of the joint (in steps per second)
+        float speed;           // The speed of the joint (in steps per second)
       } move_to_speed;
 
       struct {
@@ -114,7 +114,8 @@ public:
   State* get_state();
 
   /**
-   * Get the current position of the joint.
+   * Get the current position of the joint. This will use the encoder if feedback is enabled,
+   * otherwise it will use the stepper motor.
    *
    * @return The current position of the joint (in degrees).
    */
@@ -201,6 +202,18 @@ public:
    */
   void update();
 
+  /**
+   * Uses the encoder value to remove any error in the stepper position.
+   */
+  void fix_stepper_position();
+
+  /**
+   * Enable or disable encoder feedback.
+   *
+   * @param[in] enabled Whether or not to enable encoder feedback.
+   */
+  void set_feedback_enabled(bool enabled);
+
 private:
   AccelStepper stepper;
   Encoder encoder;
@@ -213,6 +226,7 @@ private:
   State state;
   JointConfig config;
   bool is_calibrated;
+  bool encoder_feedback_enabled;
   float measured_speed;
   int32_t last_encoder_pos;
   elapsedMicros micros_timer;

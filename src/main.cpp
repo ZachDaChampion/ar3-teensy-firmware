@@ -69,8 +69,8 @@ struct CobotState {
 
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
-#define FW_VERSION 2
-#define FW_VERSION_STR "2"
+#define FW_VERSION 3
+#define FW_VERSION_STR "3"
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
@@ -657,6 +657,38 @@ void handle_set_log_level(uint32_t request_id, const uint8_t* data, uint8_t data
   }
 }
 
+/**
+ * Handles a SetFeedback request.
+ *
+ * @param[in] request_id The ID of the request.
+ * @param[in] data The request data.
+ * @param[in] data_len The length of the data buffer.
+ */
+void handle_set_feedback(uint32_t request_id, const uint8_t* data, uint8_t data_len)
+{
+  if (!initialized) {
+    return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
+  }
+  if (data_len != 1) {
+    return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
+                                         "The request data is not 1 byte.");
+  }
+
+  uint8_t feedback_bf = data[0];
+
+  // Verify that no feedbacks are set that don't exist.
+  if (feedback_bf >> JOINT_COUNT) {
+    return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
+                                         "The feedbacks bitfield contains bits that don't "
+                                         "correspond to any feedbacks.");
+  }
+
+  // Set the feedbacks.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    joints[i].set_feedback_enabled(feedback_bf & (1 << i));
+  }
+}
+
 //                                                                                                //
 // ================================= Arduino control functions ================================== //
 //                                                                                                //
@@ -814,6 +846,9 @@ void loop()
       break;
     case static_cast<uint8_t>(Request::SetLogLevel):
       handle_set_log_level(request_id, msg + 5, msg_payload_len);
+      break;
+    case static_cast<uint8_t>(Request::SetFeedback):
+      handle_set_feedback(request_id, msg + 5, msg_payload_len);
       break;
 
     default:

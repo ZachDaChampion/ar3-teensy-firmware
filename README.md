@@ -28,28 +28,24 @@ Each message begins with a 3-byte header followed by a payload.
 | Byte | Description      |
 | ---- | ---------------- |
 | 0    | Response type    |
-| 1... | Response payload |
+| 1-4  | Command ID       |
+| 5... | Response payload |
 
 #### Ack Response
 
-| Byte | Description |
-| ---- | ----------- |
-| 0-3  | Command ID  |
+No payload
 
 #### Done Response
 
-| Byte | Description |
-| ---- | ----------- |
-| 0-3  | Command ID  |
+No payload
 
 ### Error Response
 
 | Byte | Description          |
 | ---- | -------------------- |
-| 0-3  | Command ID           |
-| 4    | Error code           |
-| 5    | Error message length |
-| 6... | Error message        |
+| 0    | Error code           |
+| 1    | Error message length |
+| 2... | Error message        |
 
 #### Joints Response
 
@@ -85,6 +81,10 @@ Each message begins with a 3-byte header followed by a payload.
 | N + 0   | Joint ID                         |
 | N + 1-4 | New angle (int32) (deg \* 10^-3) |
 
+### Get Joints
+
+No payload
+
 ### Move To
 
 | Byte    | Description                      |
@@ -112,6 +112,22 @@ Each message begins with a 3-byte header followed by a payload.
 | Byte | Description                   |
 | ---- | ----------------------------- |
 | 0    | Bitfield of joints to go home |
+
+### Reset
+
+No payload
+
+### Set Log Level
+
+| Byte | Description                 |
+| ---- | --------------------------- |
+| 0    | Log level (0-3, 4 for none) |
+
+### Set Feedback
+
+| Byte | Description                                   |
+| ---- | --------------------------------------------- |
+| 0    | Bitfield of joints to enable/disable feedback |
 
 # PlatformIO
 
