@@ -91,7 +91,7 @@ static Joint joints[] = {
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
 
-    .direction = 1,
+    .direction = -1,
 
     .max_speed = 160.0,
     .max_accel = 220.0,
@@ -123,7 +123,7 @@ static Joint joints[] = {
     .motor_reduction = 39.2,
     .enc_reduction = 39.2,
 
-    .direction = 1,
+    .direction = -1,
 
     .max_speed = 240.0,
     .max_accel = 1200.0,
@@ -141,7 +141,7 @@ static Joint joints[] = {
   
   Joint({
     .id = 4,
-    .name = "wrist roll",
+    .name = "wrist pitch",
 
     .min_steps = -2000,
     .max_steps = 2000,
@@ -173,7 +173,7 @@ static Joint joints[] = {
   
   Joint({
     .id = 5,
-    .name = "wrist pitch",
+    .name = "wrist roll",
 
     .min_steps = -3000,
     .max_steps = 3250,
