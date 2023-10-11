@@ -19,17 +19,19 @@ Each message begins with a 3-byte header followed by a payload.
 
 | Byte | Description    |
 | ---- | -------------- |
-| 0    | Log level      |
-| 1    | Message length |
-| 2... | Message        |
+| 0    | 0x00 (log)     |
+| 1    | Log level      |
+| 2    | Message length |
+| 3... | Message        |
 
 ### Response
 
 | Byte | Description      |
 | ---- | ---------------- |
-| 0    | Response type    |
-| 1-4  | Command ID       |
-| 5... | Response payload |
+| 0    | 0x01 (response)  |
+| 1    | Response type    |
+| 2-5  | Command ID       |
+| 6... | Response payload |
 
 #### Ack Response
 

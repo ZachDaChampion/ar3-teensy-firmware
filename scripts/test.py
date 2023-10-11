@@ -1,4 +1,4 @@
-COM_PORT = 'COM5'
+COM_PORT = '/dev/ttyACM0'
 
 import serial
 import struct
@@ -66,11 +66,13 @@ def move_to(entries_list):
 
 try:
   ser = serial.Serial(COM_PORT, 115200, timeout=1)
-except:
+except Exception as e1:
+  print(e1)
   try:
-    ser = serial.Serial('COM8', 115200, timeout=1)
-  except:
-    print('Failed to open serial port.')
+    ser = serial.Serial('/dev/ttyCobot0', 115200, timeout=1)
+  except Exception as e2:
+    print('Failed to open serial port')
+    print(e2)
     ser = None
 
 while True:
