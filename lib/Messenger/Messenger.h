@@ -159,7 +159,7 @@ public:
   void send_done(uint32_t msg_id)
   {
     // 3 bytes for framing, 1 for response, 1 for response type, 4 for msg_id.
-    static_assert(BUFFER_SIZE >= 3 + 1 + 4, "Buffer is too small to send done response");
+    static_assert(BUFFER_SIZE >= 3 + 1 + 1 + 4, "Buffer is too small to send done response");
 
     this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
     this->out_message[1] = static_cast<uint8_t>(Response::Done);
