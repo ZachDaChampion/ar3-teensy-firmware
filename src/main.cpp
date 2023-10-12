@@ -69,8 +69,8 @@ struct CobotState {
 
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
-#define FW_VERSION 3
-#define FW_VERSION_STR "3"
+#define FW_VERSION 4
+#define FW_VERSION_STR "4"
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
