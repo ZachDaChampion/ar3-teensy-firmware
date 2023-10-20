@@ -59,7 +59,7 @@ static Joint joints[] = {
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
 
-    .direction = -1,
+    .direction = 1,
 
     .max_speed = 60.0,
     .max_accel = 240.0,
@@ -91,7 +91,7 @@ static Joint joints[] = {
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
 
-    .direction = -1,
+    .direction = 1,
 
     .max_speed = 160.0,
     .max_accel = 220.0,
@@ -155,7 +155,7 @@ static Joint joints[] = {
     .motor_reduction = 9.1455,
     .enc_reduction = 9.1455,
 
-    .direction = -1,
+    .direction = 1,
 
     .max_speed = 200.0,
     .max_accel = 600.0,

@@ -363,8 +363,9 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     deserialize_int32(&speed, entry + 5);
 
     if (!joints[i].position_within_range(angle)) {
-      return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joint positions are out of range.");
+      char msg[128];
+      snprintf(msg, 128, "Joint %u position %ld is out of range.", i, angle);
+      return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE, msg);
     }
     if (speed < 0) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
@@ -400,10 +401,14 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
       int32_t speed;
       deserialize_int32(&speed, entry + 5);
 
-      if (speed == 0) {
-        joints[i].move_to_auto(angle);
-      } else
-        joints[i].move_to_speed(angle, speed);
+      // if (speed == 0) {
+      //   joints[i].move_to_auto(angle);
+      // } else {
+      //   char spd_msg[128];
+      //   snprintf(spd_msg, 128, "J %u spd %ld", i, speed);
+      //   messenger.log(LogLevel::INFO, spd_msg);
+      joints[i].move_to_speed(angle, speed, &messenger);
+      // }
     }
   }
 
