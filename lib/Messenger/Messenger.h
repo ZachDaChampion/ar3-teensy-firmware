@@ -112,13 +112,21 @@ public:
    * Writes a log message to Serial if the log level is high enough.
    *
    * @param[in] level The log level of the message.
-   * @param[in] message The message to log.
+   * @param[in] format The message to log.
+   * @param[in] ... The arguments to the format string.
    */
-  void log(LogLevel level, const char* message)
+  void log(LogLevel level, const char* format, ...)
   {
     if (level < this->log_level) return;
 
-    // Calculate the length of the message.
+    // Format the message.
+    static char message[BUFFER_SIZE];
+    va_list args;
+    va_start(args, format);
+    if (vsnprintf(message, BUFFER_SIZE, format, args) < 0) return;
+    va_end(args);
+
+    // Make sure the message is not too long.
     int message_len = strlen(message);
     if (message_len < 0) return;
     uint8_t full_message_len = message_len + 1 + 2;  // +1 for log, +2 for level and string length.

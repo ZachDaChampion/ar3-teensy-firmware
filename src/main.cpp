@@ -549,7 +549,7 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
 
   // Ensure that all new positions are within the joint and speed limits.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    const uint8_t* entry = data + i;
+    const uint8_t* entry = data + i * 8;
 
     int32_t angle;
     deserialize_int32(&angle, entry + 0);
@@ -586,7 +586,7 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
 
   // Move all specified joints to their target positions.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
-    const uint8_t* entry = data + i;
+    const uint8_t* entry = data + i * 8;
 
     int32_t angle;
     deserialize_int32(&angle, entry + 0);
