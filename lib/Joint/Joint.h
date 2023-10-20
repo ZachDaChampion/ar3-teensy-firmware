@@ -14,9 +14,6 @@
 #include <Encoder.h>
 #include <LimitSwitch.h>
 
-#include <Messenger.h>
-
-
 struct JointConfig {
   uint8_t id;        // ID of the joint (0-5)
   const char* name;  // Name of the joint
@@ -144,7 +141,7 @@ public:
    * @param[in] target The target position of the joint (in degrees * 10^3).
    * @param[in] speed The speed of the joint (in degrees * 10^3 per second) (positive).
    */
-  void move_to_speed(int32_t target, int32_t speed, Messenger<1024U>* messenger);
+  void move_to_speed(int32_t target, int32_t speed);
 
   /**
    * Begin moving the joint indefinitely at a specified speed.

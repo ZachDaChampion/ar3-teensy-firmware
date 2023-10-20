@@ -401,14 +401,10 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
       int32_t speed;
       deserialize_int32(&speed, entry + 5);
 
-      // if (speed == 0) {
-      //   joints[i].move_to_auto(angle);
-      // } else {
-      //   char spd_msg[128];
-      //   snprintf(spd_msg, 128, "J %u spd %ld", i, speed);
-      //   messenger.log(LogLevel::INFO, spd_msg);
-      joints[i].move_to_speed(angle, speed, &messenger);
-      // }
+      if (speed == 0)
+        joints[i].move_to_auto(angle);
+      else
+        joints[i].move_to_speed(angle, speed);
     }
   }
 
@@ -626,6 +622,9 @@ void handle_reset(uint32_t request_id)
   }
   state.id = CobotState::IDLE;
   state.msg_id = 0;
+  initialized = false;
+  message_in_progress = false;
+  serial_buffer_in_len = 0;
   return messenger.send_ack(request_id);
 }
 
@@ -848,7 +847,7 @@ void loop()
       break;
     case static_cast<uint8_t>(Request::Reset):
       handle_reset(request_id);
-      break;
+      return;
     case static_cast<uint8_t>(Request::SetLogLevel):
       handle_set_log_level(request_id, msg + 5, msg_payload_len);
       break;

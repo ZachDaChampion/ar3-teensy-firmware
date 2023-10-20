@@ -1,0 +1,4 @@
+- add FollowTrajectory
+- double check safety checks
+- improve error messages
+- add logging

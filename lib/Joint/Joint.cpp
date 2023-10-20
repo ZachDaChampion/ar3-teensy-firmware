@@ -62,7 +62,7 @@ void Joint::move_to_auto(int32_t target)
   stepper.moveTo(state.data.move_to_auto.target_steps);
 }
 
-void Joint::move_to_speed(int32_t target, int32_t speed, Messenger<1024U>* messenger)
+void Joint::move_to_speed(int32_t target, int32_t speed)
 {
   if (encoder_feedback_enabled) fix_stepper_position();
 
@@ -82,11 +82,6 @@ void Joint::move_to_speed(int32_t target, int32_t speed, Messenger<1024U>* messe
   if (state.data.move_to_speed.speed < 0) state.data.move_to_speed.speed = 0;
   if (state.data.move_to_speed.speed > config.max_speed / motor_deg_per_step)
     state.data.move_to_speed.speed = config.max_speed / motor_deg_per_step;
-
-  char msg[128];
-  snprintf(msg, 128, "J%u int %ld float %.03f steps %.03f", config.id, target, speed_f,
-           state.data.move_to_speed.speed);
-  messenger->log(LogLevel::INFO, msg);
 
   stepper.moveTo(state.data.move_to_speed.target_steps);
   stepper.setSpeed(state.data.move_to_speed.speed);
