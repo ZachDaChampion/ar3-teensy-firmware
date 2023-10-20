@@ -51,7 +51,7 @@ def home(bitfield):
   global uuid
   id = uuid
   uuid += 1
-  return b'\x07' + struct.pack('<I', id) + struct.pack('B', bitfield)
+  return b'\x08' + struct.pack('<I', id) + struct.pack('B', bitfield)
 
 def move_to(entries_list):
   global uuid
