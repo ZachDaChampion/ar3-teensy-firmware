@@ -120,13 +120,14 @@ public:
     // Calculate the length of the message.
     int message_len = strlen(message);
     if (message_len < 0) return;
-    uint8_t full_message_len = message_len + 2;  // +2 for log level and string length.
+    uint8_t full_message_len = message_len + 1 + 2;  // +1 for log, +2 for level and string length.
     if (full_message_len + 3u > BUFFER_SIZE) return;
 
     // Create the message.
-    this->out_message[0] = static_cast<uint8_t>(level);
-    this->out_message[1] = static_cast<uint8_t>(message_len);
-    memcpy(this->out_message + 2, message, message_len);
+    this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Log);
+    this->out_message[1] = static_cast<uint8_t>(level);
+    this->out_message[2] = static_cast<uint8_t>(message_len);
+    memcpy(this->out_message + 3, message, message_len);
 
     // Frame the message.
     int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, full_message_len);
@@ -140,12 +141,13 @@ public:
    */
   void send_ack(uint32_t msg_id)
   {
-    // 3 bytes for framing, 1 byte for response type, 4 bytes for msg_id.
-    static_assert(BUFFER_SIZE >= 3 + 1 + 4, "Buffer is too small to send ack response");
+    // 3 bytes for framing, 1 for response, 1 for response type, 4 for msg_id.
+    static_assert(BUFFER_SIZE >= 3 + 1 + 1 + 4, "Buffer is too small to send ack response");
 
-    this->out_message[0] = static_cast<uint8_t>(Response::Ack);
-    serialize_uint32(this->out_message + 1, MESSAGE_SIZE, msg_id);
-    int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, 5);
+    this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
+    this->out_message[1] = static_cast<uint8_t>(Response::Ack);
+    serialize_uint32(this->out_message + 2, MESSAGE_SIZE, msg_id);
+    int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, 6);
     if (written > 0) Serial.write(this->out_buffer, written);
   }
 
@@ -156,12 +158,13 @@ public:
    */
   void send_done(uint32_t msg_id)
   {
-    // 3 bytes for framing, 1 byte for response type, 4 bytes for msg_id.
-    static_assert(BUFFER_SIZE >= 3 + 1 + 4, "Buffer is too small to send done response");
+    // 3 bytes for framing, 1 for response, 1 for response type, 4 for msg_id.
+    static_assert(BUFFER_SIZE >= 3 + 1 + 1 + 4, "Buffer is too small to send done response");
 
-    this->out_message[0] = static_cast<uint8_t>(Response::Done);
-    serialize_uint32(this->out_message + 1, MESSAGE_SIZE, msg_id);
-    int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, 5);
+    this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
+    this->out_message[1] = static_cast<uint8_t>(Response::Done);
+    serialize_uint32(this->out_message + 2, MESSAGE_SIZE, msg_id);
+    int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, 6);
     if (written > 0) Serial.write(this->out_buffer, written);
   }
 
@@ -177,15 +180,17 @@ public:
     int error_msg_len = strlen(error_msg);
     if (error_msg_len < 0) return;
 
-    // +1 for error code, +4 for msg_id, +2 for error code and error message length.
-    uint8_t full_message_len = error_msg_len + 1 + 4 + 2;
+    // +1 for response, +1 for response type, +4 for msg_id, +2 for error code and error message
+    // length.
+    uint8_t full_message_len = error_msg_len + 1 + 1 + 4 + 2;
     if (full_message_len + 3u > BUFFER_SIZE) return;
 
-    this->out_message[0] = static_cast<uint8_t>(Response::Error);
-    serialize_uint32(this->out_message + 1, MESSAGE_SIZE, msg_id);
-    this->out_message[5] = static_cast<uint8_t>(error_code);
-    this->out_message[6] = static_cast<uint8_t>(error_msg_len);
-    memcpy(this->out_message + 7, error_msg, error_msg_len);
+    this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
+    this->out_message[1] = static_cast<uint8_t>(Response::Error);
+    serialize_uint32(this->out_message + 2, MESSAGE_SIZE, msg_id);
+    this->out_message[6] = static_cast<uint8_t>(error_code);
+    this->out_message[7] = static_cast<uint8_t>(error_msg_len);
+    memcpy(this->out_message + 8, error_msg, error_msg_len);
     int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, full_message_len);
     if (written > 0) Serial.write(this->out_buffer, written);
   }
@@ -199,16 +204,17 @@ public:
    */
   void send_joints_response(uint32_t msg_id, JointsResponse* joints, uint8_t num_joints)
   {
-    // +1 for response type, +4 for msg_id, +1 for num_joints, +8 for each joint.
-    uint8_t full_message_len = 1 + 4 + 1 + 8 * num_joints;
+    // +1 for response, +1 for response type, +4 for msg_id, +1 for num_joints, +8 for each joint.
+    uint8_t full_message_len = 1 + 1 + 4 + 1 + 8 * num_joints;
     if (full_message_len + 3u > BUFFER_SIZE) return;
 
-    this->out_message[0] = static_cast<uint8_t>(Response::Joints);
-    serialize_uint32(this->out_message + 1, MESSAGE_SIZE, msg_id);
-    this->out_message[5] = num_joints;
+    this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
+    this->out_message[1] = static_cast<uint8_t>(Response::Joints);
+    serialize_uint32(this->out_message + 2, MESSAGE_SIZE, msg_id);
+    this->out_message[6] = num_joints;
     for (int i = 0; i < num_joints; i++) {
-      serialize_int32(this->out_message + 6 + 8 * i, MESSAGE_SIZE, joints[i].angle);
-      serialize_int32(this->out_message + 10 + 8 * i, MESSAGE_SIZE, joints[i].speed);
+      serialize_int32(this->out_message + 7 + 8 * i, MESSAGE_SIZE, joints[i].angle);
+      serialize_int32(this->out_message + 11 + 8 * i, MESSAGE_SIZE, joints[i].speed);
     }
     int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, full_message_len);
     if (written > 0) Serial.write(this->out_buffer, written);

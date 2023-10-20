@@ -1,5 +1,6 @@
 #include "Joint.h"
 
+
 Joint::Joint(JointConfig config)
   : config(config)
   , stepper(AccelStepper::DRIVER, config.step_pin, config.dir_pin)
@@ -34,9 +35,9 @@ Joint::State* Joint::get_state()
 float Joint::get_position()
 {
   if (encoder_feedback_enabled)
-    return encoder.read() * enc_deg_per_tick;
+    return encoder.read() * config.direction * enc_deg_per_tick;
   else
-    return stepper.currentPosition() * motor_deg_per_step;
+    return stepper.currentPosition() * config.direction * motor_deg_per_step;
 }
 
 float Joint::get_speed()
@@ -61,14 +62,15 @@ void Joint::move_to_auto(int32_t target)
   stepper.moveTo(state.data.move_to_auto.target_steps);
 }
 
-void Joint::move_to_speed(int32_t target, int32_t speed)
+void Joint::move_to_speed(int32_t target, int32_t speed, Messenger<1024U>* messenger)
 {
   if (encoder_feedback_enabled) fix_stepper_position();
 
   float target_f = target * 0.001f;
+  float speed_f = speed * 0.001f;
   state.id = State::MOVE_TO_SPEED;
   state.data.move_to_speed.target_steps = config.direction * target_f / motor_deg_per_step;
-  state.data.move_to_speed.speed = speed / motor_deg_per_step;
+  state.data.move_to_speed.speed = speed_f / motor_deg_per_step;
 
   // Limit the target position to the range of the joint.
   if (state.data.move_to_speed.target_steps < config.min_steps)
@@ -78,8 +80,13 @@ void Joint::move_to_speed(int32_t target, int32_t speed)
 
   // Limit the speed to between 0 and the maximum speed of the joint.
   if (state.data.move_to_speed.speed < 0) state.data.move_to_speed.speed = 0;
-  if (state.data.move_to_speed.speed > config.max_speed)
-    state.data.move_to_speed.speed = config.max_speed;
+  if (state.data.move_to_speed.speed > config.max_speed / motor_deg_per_step)
+    state.data.move_to_speed.speed = config.max_speed / motor_deg_per_step;
+
+  char msg[128];
+  snprintf(msg, 128, "J%u int %ld float %.03f steps %.03f", config.id, target, speed_f,
+           state.data.move_to_speed.speed);
+  messenger->log(LogLevel::INFO, msg);
 
   stepper.moveTo(state.data.move_to_speed.target_steps);
   stepper.setSpeed(state.data.move_to_speed.speed);
@@ -95,9 +102,9 @@ void Joint::move_forever_speed(int32_t speed)
 
   // Limit the speed to between -max_speed and max_speed.
   if (state.data.move_forever_speed.speed < -config.max_speed)
-    state.data.move_forever_speed.speed = -config.max_speed;
+    state.data.move_forever_speed.speed = -config.max_speed / motor_deg_per_step;
   if (state.data.move_forever_speed.speed > config.max_speed)
-    state.data.move_forever_speed.speed = config.max_speed;
+    state.data.move_forever_speed.speed = config.max_speed / motor_deg_per_step;
 
   stepper.setSpeed(state.data.move_forever_speed.speed);
 }
@@ -229,7 +236,7 @@ void Joint::update()
    * last update. This way, the filter is independent of the update rate.
    */
 
-  int32_t encoder_pos = encoder.read();
+  int32_t encoder_pos = encoder.read() * config.direction;
   float dt = micros_timer / 1000000.0f;
   if (dt == 0) return;
   micros_timer = 0;
