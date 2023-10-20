@@ -84,7 +84,7 @@ struct JointsResponse {
   int32_t speed;  // in degrees * 10^-3 / second
 };
 
-template <size_t BUFFER_SIZE>
+template <size_t BUFFER_SIZE, size_t ERROR_MSG_BUFFER_SIZE>
 class Messenger
 {
 public:
@@ -170,29 +170,42 @@ public:
   }
 
   /**
-   * Writes an error response to serial.
+   * Writes a formatted error response to serial.
    *
    * @param[in] msg_id The ID of the message that this is a response to.
    * @param[in] error_code The error code to send.
-   * @param[in] error_msg The error message to send.
+   * @param[in] format The format string to use.
+   * @param[in] ... The arguments to the format string.
    */
-  void send_error_response(uint32_t msg_id, ErrorCode error_code, const char* error_msg)
+  void send_error_response(uint32_t msg_id, ErrorCode error_code, const char* format, ...)
   {
+    if (msg_id == 0) return;
+
+    // Format the error message.
+    static char error_msg[ERROR_MSG_BUFFER_SIZE];
+    va_list args;
+    va_start(args, format);
+    if (vsnprintf(error_msg, ERROR_MSG_BUFFER_SIZE, format, args) < 0) return;
+    va_end(args);
+
+    // Make sure the error message is not too long.
     int error_msg_len = strlen(error_msg);
     if (error_msg_len < 0) return;
-    if (msg_id == 0) return;
 
     // +1 for response, +1 for response type, +4 for msg_id, +2 for error code and error message
     // length.
     uint8_t full_message_len = error_msg_len + 1 + 1 + 4 + 2;
     if (full_message_len + 3u > BUFFER_SIZE) return;
 
+    // Create the message.
     this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
     this->out_message[1] = static_cast<uint8_t>(Response::Error);
     serialize_uint32(this->out_message + 2, MESSAGE_SIZE, msg_id);
     this->out_message[6] = static_cast<uint8_t>(error_code);
     this->out_message[7] = static_cast<uint8_t>(error_msg_len);
     memcpy(this->out_message + 8, error_msg, error_msg_len);
+
+    // Frame and send the message.
     int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, full_message_len);
     if (written > 0) Serial.write(this->out_buffer, written);
   }

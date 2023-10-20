@@ -71,7 +71,6 @@ struct CobotState {
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
 #define FW_VERSION 5
-#define FW_VERSION_STR "5"
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
@@ -91,8 +90,11 @@ static uint8_t serial_buffer_in[SERIAL_BUFFER_SIZE];
 static uint8_t serial_buffer_out[SERIAL_BUFFER_SIZE];
 static size_t serial_buffer_in_len = 0;
 
+// Size of the buffer used to construct error messages.
+static const size_t ERROR_MSG_BUFFER_SIZE = 512;
+
 // The messenger.
-Messenger<SERIAL_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::INFO);
+Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::INFO);
 
 //                                                                                                //
 // ====================================== Request handlers ====================================== //
@@ -111,7 +113,9 @@ void handle_init(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 {
   if (data_len != sizeof(uint32_t)) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is too short.");
+                                         "(INIT) Payload is the wrong size (expected %u, got "
+                                         "%u)",
+                                         sizeof(uint32_t), data_len);
   }
 
   uint32_t expected_fw_version;
@@ -122,7 +126,9 @@ void handle_init(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     return messenger.send_ack(request_id);
   } else {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_FIRMWARE_VERSION,
-                                         "COBOT is running firmware version " FW_VERSION_STR ".");
+                                         "(INIT) COBOT is running firmware version %lu, "
+                                         "expected version %lu",
+                                         FW_VERSION, expected_fw_version);
   }
 }
 
@@ -142,7 +148,9 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
   }
   if (data_len != 1) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is too short.");
+                                         "(CALIBRATE) Payload is the wrong size (expected 1, got "
+                                         "%u)",
+                                         data_len);
   }
 
   uint8_t joints_bf = data[0];
@@ -150,8 +158,9 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
   // Verify that no joints are set that don't exist.
   if (joints_bf >> JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "The joints bitfield contains bits that don't "
-                                         "correspond to any joints.");
+                                         "(CALIBRATE) The bitfield 0x%02x contains bits that don't "
+                                         "correspond to any joints",
+                                         joints_bf);
   }
 
   // In order to safely calibrate a joint, all previous joints in the calibration order must already
@@ -169,14 +178,16 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
 
     if (found_first && !(to_calibrate || already_calibrated)) {
       return messenger.send_error_response(state.msg_id, ErrorCode::NOT_CALIBRATED,
-                                           "Joints cannot be safely calibrated.");
+                                           "(CALIBRATE) Joint %u cannot be safely calibrated "
+                                           "because previous joints are not calibrated",
+                                           index);
     }
     if (to_calibrate) found_first = true;
   }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by calibration");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by CALIBRATE");
   }
 
   // Stop all joints.
@@ -221,12 +232,16 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
   if (data_len % 5 != 0) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is not a multiple of 5 bytes.");
+                                         "(OVERRIDE) The payload length should be a multiple of 5 "
+                                         "bytes (got %u bytes)",
+                                         data_len);
   }
   uint8_t entry_count = data_len / 5;
   if (entry_count > JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is too long.");
+                                         "(OVERRIDE) The payload is too long (got %u bytes, "
+                                         "expected %u bytes)",
+                                         data_len, JOINT_COUNT * 5);
   }
 
   // Create a map from joint index to entry index. Any joint that does not have an entry will be
@@ -249,7 +264,7 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   // Verify that all specified joints were found.
   if (found < entry_count) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "Some joints were not found.");
+                                         "(OVERRIDE) Some joints were not found");
   }
 
   // Ensure that all override angles are within the joint limits.
@@ -259,7 +274,8 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     deserialize_int32(&angle, entry + 1);
     if (!joints[i].position_within_range(angle)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joints are out of range.");
+                                           "(OVERRIDE) Joint %u position %ld is out of range", i,
+                                           angle);
     }
   }
 
@@ -268,7 +284,7 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     if (map[i] == -1) continue;
     if (joints[i].get_state()->id != Joint::State::IDLE) {
       return messenger.send_error_response(request_id, ErrorCode::OTHER,
-                                           "Some joints are not idle.");
+                                           "(OVERRIDE) joint %u is not idle", i);
     }
   }
 
@@ -321,12 +337,15 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
   if (data_len % 9 != 0) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is not a multiple of 9 bytes.");
+                                         "(MOVE TO) The payload length should be a multiple of 9 "
+                                         "bytes (got %u bytes)",
+                                         data_len);
   }
   uint8_t entry_count = data_len / 9;
   if (entry_count > JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is too long.");
+                                         "(MOVE TO) More than %u joints specified (got %u)",
+                                         JOINT_COUNT, entry_count);
   }
 
   // Create a map from joint index to entry index. Any joint that does not have an entry will be
@@ -349,7 +368,7 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   // Verify that all specified joints were found.
   if (found < entry_count) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "Some joints were not found.");
+                                         "(MOVE TO) Some joints were not found");
   }
 
   // Ensure that all new positions are within the joint and speed limits. Speeds must be
@@ -365,16 +384,17 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 
     if (!joints[i].position_within_range(angle)) {
       char msg[128];
-      snprintf(msg, 128, "Joint %u position %ld is out of range.", i, angle);
+      snprintf(msg, 128, "(MOVE TO) Joint %u position %ld is out of range", i, angle);
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE, msg);
     }
     if (speed < 0) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joint speeds are negative.");
+                                           "(MOVE TO) Joint %u speed %ld is negative", i, speed);
     }
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joint speeds are out of range.");
+                                           "(MOVE TO) Joint %u speed %ld is out of range", i,
+                                           speed);
     }
   }
 
@@ -383,13 +403,13 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     if (map[i] == -1) continue;
     if (!joints[i].get_is_calibrated()) {
       return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
-                                           "Some joints are not calibrated.");
+                                           "(MOVE TO) Joint %u is not calibrated", i);
     }
   }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by MOVE TO");
   }
 
   // Move all specified joints to their target positions.
@@ -431,12 +451,15 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
   }
   if (data_len % 5 != 0) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is not a multiple of 5 bytes.");
+                                         "(MOVE SPEED) The payload length should be a multiple of "
+                                         "5 bytes (got %u bytes)",
+                                         data_len);
   }
   uint8_t entry_count = data_len / 5;
   if (entry_count > JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is too long.");
+                                         "(MOVE SPEED) More than %u joints specified (got %u)",
+                                         JOINT_COUNT, entry_count);
   }
 
   // Create a map from joint index to entry index. Any joint that does not have an entry will be
@@ -460,7 +483,7 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
   // Verify that all specified joints were found.
   if (found < entry_count) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "Some joints were not found.");
+                                         "(MOVE SPEED) Some joints were not found");
   }
 
   // Ensure that all speeds are within the joint limits. Speeds may be negative to indicate
@@ -474,13 +497,14 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
 
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joint speeds are out of range.");
+                                           "(MOVE SPEED) Joint %u speed %ld is out of range", i,
+                                           speed);
     }
   }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by MOVE SPEED");
   }
 
   // Move all specified joints at their target speeds.
@@ -518,11 +542,12 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
   }
   if (data_len != 8 * JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is the wrong size.");
+                                         "(FOLLOW TRAJECTORY) The payload length should be %u "
+                                         "bytes (got %u bytes)",
+                                         8 * JOINT_COUNT, data_len);
   }
 
-  // Ensure that all new positions are within the joint and speed limits. Speeds must be
-  // non-negative to be valid.
+  // Ensure that all new positions are within the joint and speed limits.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     const uint8_t* entry = data + i;
 
@@ -532,17 +557,16 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
     deserialize_int32(&speed, entry + 4);
 
     if (!joints[i].position_within_range(angle)) {
-      char msg[128];
-      snprintf(msg, 128, "Joint %u position %ld is out of range.", i, angle);
-      return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE, msg);
-    }
-    if (speed < 0) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joint speeds are negative.");
+                                           "(FOLLOW TRAJECTORY) Joint %u position %ld is out of "
+                                           "range",
+                                           i, angle);
     }
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "Some joint speeds are out of range.");
+                                           "(FOLLOW TRAJECTORY) Joint %u speed %ld is out of "
+                                           "range",
+                                           i, speed);
     }
   }
 
@@ -550,13 +574,14 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     if (!joints[i].get_is_calibrated()) {
       return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
-                                           "Some joints are not calibrated.");
+                                           "(FOLLOW TRAJECTORY) Joint %u is not calibrated", i);
     }
   }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED,
+                                  "Interrupted by FOLLOW TRAJECTORY");
   }
 
   // Move all specified joints to their target positions.
@@ -594,7 +619,9 @@ void handle_stop(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
   if (data_len != 2) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is too short.");
+                                         "(STOP) The payload length should be 2 bytes (got %u "
+                                         "bytes)",
+                                         data_len);
   }
 
   uint8_t immediate = data[0];
@@ -603,13 +630,14 @@ void handle_stop(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   // Verify that no joints are set that don't exist.
   if (joints_bf >> JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "The joints bitfield contains bits that don't "
-                                         "correspond to any joints.");
+                                         "(STOP) The bitfield 0x%02x contains bits that don't "
+                                         "correspond to any joints",
+                                         joints_bf);
   }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by stop");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by STOP");
   }
 
   // Stop all specified joints. This will stop them smoothly only if immediate is false AND the
@@ -642,7 +670,9 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
   if (data_len != 1) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is not 1 byte.");
+                                         "(GO HOME) The payload length should be 1 byte (got %u "
+                                         "bytes)",
+                                         data_len);
   }
 
   uint8_t joints_bf = data[0];
@@ -650,8 +680,9 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   // Verify that no joints are set that don't exist.
   if (joints_bf >> JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "The joints bitfield contains bits that don't "
-                                         "correspond to any joints.");
+                                         "(GO HOME) The bitfield 0x%02x contains bits that don't "
+                                         "correspond to any joints",
+                                         joints_bf);
   }
 
   // Verify that all specified joints are calibrated.
@@ -659,14 +690,14 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     if (joints_bf & (1 << i)) {
       if (!joints[i].get_is_calibrated()) {
         return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
-                                             "Some joints are not calibrated.");
+                                             "(GO HOME) Joint %u is not calibrated", i);
       }
     }
   }
 
   // If we are interrupting an active process, respond to it with an error.
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by go home");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by GO HOME");
   }
 
   // Move the specified joints to their home positions.
@@ -691,7 +722,7 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 void handle_reset(uint32_t request_id)
 {
   if (state.msg_id != 0) {
-    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by reset");
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by RESET");
   }
 
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
@@ -721,7 +752,9 @@ void handle_set_log_level(uint32_t request_id, const uint8_t* data, uint8_t data
   }
   if (data_len != 1) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is not 1 byte.");
+                                         "(SET LOG LEVEL) The payload length should be 1 byte (got "
+                                         "%u bytes)",
+                                         data_len);
   }
 
   uint8_t new_log_level = data[0];
@@ -734,7 +767,7 @@ void handle_set_log_level(uint32_t request_id, const uint8_t* data, uint8_t data
       return messenger.send_ack(request_id);
     default:
       return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                           "Invalid log level.");
+                                           "(SET LOG LEVEL) Invalid log level %u", new_log_level);
   }
 }
 
@@ -752,7 +785,9 @@ void handle_set_feedback(uint32_t request_id, const uint8_t* data, uint8_t data_
   }
   if (data_len != 1) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                         "The request data is not 1 byte.");
+                                         "(SET FEEDBACK) The payload length should be 1 byte (got "
+                                         "%u bytes)",
+                                         data_len);
   }
 
   uint8_t feedback_bf = data[0];
@@ -760,8 +795,9 @@ void handle_set_feedback(uint32_t request_id, const uint8_t* data, uint8_t data_
   // Verify that no feedbacks are set that don't exist.
   if (feedback_bf >> JOINT_COUNT) {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_JOINT,
-                                         "The feedbacks bitfield contains bits that don't "
-                                         "correspond to any feedbacks.");
+                                         "(SET FEEDBACK) The bitfield 0x%02x contains bits that "
+                                         "don't correspond to any joints",
+                                         feedback_bf);
   }
 
   // Set the feedbacks.
@@ -875,14 +911,14 @@ void loop()
 
   // If the message is invalid, send an error log message and  discard it.
   if (msg_len == -1) {
-    messenger.log(LogLevel::ERROR, "Invalid message received.");
+    messenger.log(LogLevel::WARN, "Invalid message received.");
     serial_buffer_in_len = framing::remove_bad_frame(serial_buffer_in, serial_buffer_in_len);
     return;
   }
 
   // Parse the message as a request.
   if (msg_len < 5) {
-    messenger.log(LogLevel::ERROR, "Message is too short to be a request.");
+    messenger.log(LogLevel::WARN, "Message is too short to be a request.");
     serial_buffer_in_len = framing::remove_bad_frame(serial_buffer_in, serial_buffer_in_len);
     return;
   }
@@ -933,7 +969,7 @@ void loop()
 
     default:
       messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
-                                    "Unknown request type.");
+                                    "Unknown request type");
       break;
   }
 
