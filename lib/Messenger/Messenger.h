@@ -66,11 +66,12 @@ enum class Request {
   GetJoints = 3,
   MoveTo = 4,
   MoveSpeed = 5,
-  Stop = 6,
-  GoHome = 7,
-  Reset = 8,
-  SetLogLevel = 9,
-  SetFeedback = 10,
+  FollowTrajectory = 6,
+  Stop = 7,
+  GoHome = 8,
+  Reset = 9,
+  SetLogLevel = 10,
+  SetFeedback = 11,
 };
 
 #define MESSAGE_SIZE (BUFFER_SIZE - 3)
@@ -179,6 +180,7 @@ public:
   {
     int error_msg_len = strlen(error_msg);
     if (error_msg_len < 0) return;
+    if (msg_id == 0) return;
 
     // +1 for response, +1 for response type, +4 for msg_id, +2 for error code and error message
     // length.

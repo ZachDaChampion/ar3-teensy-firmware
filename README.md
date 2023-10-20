@@ -102,6 +102,15 @@ No payload
 | N + 0   | Joint ID                         |
 | N + 1-4 | Speed (int32) (deg \* 10^-3) / s |
 
+### Follow Trajectory
+
+For N in [0 - 5]:
+
+| Byte    | Description                         |
+| ------- | ----------------------------------- |
+| N + 0-3 | Target angle (int32) (deg \* 10^-3) |
+| N + 4-7 | Speed (int32) (deg \* 10^-3) / s    |
+
 ### Stop
 
 | Byte | Description                |

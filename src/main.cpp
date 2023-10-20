@@ -9,7 +9,7 @@
  * here. If the firmware is ever significantly updated, especially if the binary protocol changes,
  * you MUST increment the `FW_VERSION` and `FW_VERSION_STR` macros. They should always be equal.
  *
- * Joint characteristics should be configured in the "Joint configuration" section. Don't mess with
+ * Joint characteristics should be configured in the "joint-cobot<number>" files. Don't mess with
  * these unless you know what you're doing.
  */
 
@@ -43,11 +43,12 @@
 struct CobotState {
   // The ID of the state.
   enum {
-    IDLE,         // The cobot is not moving
-    STOPPING,     // The cobot is stopping
-    CALIBRATING,  // The cobot is calibrating
-    MOVE_TO,      // The cobot is moving to a specified position
-    MOVE_SPEED,   // The cobot is moving indefinitely at a specified speed
+    IDLE,               // The cobot is not moving
+    STOPPING,           // The cobot is stopping
+    CALIBRATING,        // The cobot is calibrating
+    MOVE_TO,            // The cobot is moving to a specified position
+    MOVE_SPEED,         // The cobot is moving indefinitely at a specified speed
+    FOLLOW_TRAJECTORY,  // The cobot is following a trajectory
   } id;
 
   // The ID of the message that initiated the state.
@@ -69,8 +70,8 @@ struct CobotState {
 
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
-#define FW_VERSION 4
-#define FW_VERSION_STR "4"
+#define FW_VERSION 5
+#define FW_VERSION_STR "5"
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
@@ -174,7 +175,7 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
   }
 
   // If we are interrupting an active process, respond to it with an error.
-  if (state.id != CobotState::IDLE) {
+  if (state.msg_id != 0) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by calibration");
   }
 
@@ -387,7 +388,7 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
 
   // If we are interrupting an active process, respond to it with an error.
-  if (state.id != CobotState::IDLE) {
+  if (state.msg_id != 0) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
   }
 
@@ -478,7 +479,7 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
   }
 
   // If we are interrupting an active process, respond to it with an error.
-  if (state.id != CobotState::IDLE) {
+  if (state.msg_id != 0) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
   }
 
@@ -498,6 +499,82 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
   // Set the state to MOVE_SPEED and respond to the request with an ACK.
   state.id = CobotState::MOVE_SPEED;
   state.msg_id = request_id;
+  messenger.send_ack(request_id);
+}
+
+/**
+ * Handles a FollowTrajectory request.
+ *
+ * @param[in] request_id The ID of the request.
+ * @param[in] data The request data.
+ * @param[in] data_len The length of the data buffer.
+ * @return The number of bytes written to the serial buffer, or -1 if the serial buffer was too
+ *         small.
+ */
+void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t data_len)
+{
+  if (!initialized) {
+    return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
+  }
+  if (data_len != 8 * JOINT_COUNT) {
+    return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
+                                         "The request data is the wrong size.");
+  }
+
+  // Ensure that all new positions are within the joint and speed limits. Speeds must be
+  // non-negative to be valid.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    const uint8_t* entry = data + i;
+
+    int32_t angle;
+    deserialize_int32(&angle, entry + 0);
+    int32_t speed;
+    deserialize_int32(&speed, entry + 4);
+
+    if (!joints[i].position_within_range(angle)) {
+      char msg[128];
+      snprintf(msg, 128, "Joint %u position %ld is out of range.", i, angle);
+      return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE, msg);
+    }
+    if (speed < 0) {
+      return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
+                                           "Some joint speeds are negative.");
+    }
+    if (!joints[i].speed_within_range(speed)) {
+      return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
+                                           "Some joint speeds are out of range.");
+    }
+  }
+
+  // Make sure all joints are calibrated.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    if (!joints[i].get_is_calibrated()) {
+      return messenger.send_error_response(request_id, ErrorCode::NOT_CALIBRATED,
+                                           "Some joints are not calibrated.");
+    }
+  }
+
+  // If we are interrupting an active process, respond to it with an error.
+  if (state.msg_id != 0) {
+    messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by move");
+  }
+
+  // Move all specified joints to their target positions.
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    const uint8_t* entry = data + i;
+
+    int32_t angle;
+    deserialize_int32(&angle, entry + 0);
+    int32_t speed;
+    deserialize_int32(&speed, entry + 4);
+
+    if (speed < 0) speed = -speed;  // Trajectory may include negative speeds.
+    joints[i].move_to_speed(angle, speed);
+  }
+
+  // Set the state to FOLLOW_TRAJECTORY and respond to the request with an ACK.
+  state.id = CobotState::FOLLOW_TRAJECTORY;
+  state.msg_id = 0;  // We don't care if the trajectory finishes, the controller should handle it.
   messenger.send_ack(request_id);
 }
 
@@ -531,7 +608,7 @@ void handle_stop(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
 
   // If we are interrupting an active process, respond to it with an error.
-  if (state.id != CobotState::IDLE) {
+  if (state.msg_id != 0) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by stop");
   }
 
@@ -588,7 +665,7 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   }
 
   // If we are interrupting an active process, respond to it with an error.
-  if (state.id != CobotState::IDLE) {
+  if (state.msg_id != 0) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by go home");
   }
 
@@ -613,7 +690,7 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
  */
 void handle_reset(uint32_t request_id)
 {
-  if (state.id != CobotState::IDLE) {
+  if (state.msg_id != 0) {
     messenger.send_error_response(state.msg_id, ErrorCode::CANCELLED, "Interrupted by reset");
   }
 
@@ -722,8 +799,9 @@ void loop()
 
   // Update the state of the cobot.
   switch (state.id) {
-    // In the IDLE state, do nothing.
+    // In the IDLE and FOLLOW_TRAJECTORY states, do nothing.
     case CobotState::IDLE:
+    case CobotState::FOLLOW_TRAJECTORY:
       break;
 
     // In the CALIBRATING state, check if a joint is still calibrating. If not, start calibrating
@@ -810,11 +888,6 @@ void loop()
   }
   uint8_t msg_payload_len = msg_len - 5;
   const uint8_t* msg = serial_buffer_in + (serial_buffer_in_len - msg_len);
-  Serial.print(serial_buffer_in_len);
-  Serial.print("  ");
-  Serial.print(msg_len);
-  Serial.print("  ");
-  Serial.println(msg[0]);
   uint8_t request_type = msg[0];
   int32_t request_id;
   deserialize_int32(&request_id, msg + 1);
@@ -838,6 +911,9 @@ void loop()
       break;
     case static_cast<uint8_t>(Request::MoveSpeed):
       handle_move_speed(request_id, msg + 5, msg_payload_len);
+      break;
+    case static_cast<uint8_t>(Request::FollowTrajectory):
+      handle_follow_trajectory(request_id, msg + 5, msg_payload_len);
       break;
     case static_cast<uint8_t>(Request::Stop):
       handle_stop(request_id, msg + 5, msg_payload_len);
