@@ -18,11 +18,7 @@
 #include <framing.h>
 #include <Messenger.h>
 #include <serialize.h>
-
-#if DEBUGGING
-#include "TeensyDebug.h"
-#pragma GCC optimize("O0")
-#endif
+#include <Servo.h>
 
 #if COBOT_ID == 0
 #include "joints-cobot0.cpp"
@@ -70,7 +66,7 @@ struct CobotState {
 
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
-#define FW_VERSION 5
+#define FW_VERSION 6
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
@@ -78,6 +74,9 @@ static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
 //                                                                                                //
 // ======================================== Global data ========================================= //
 //                                                                                                //
+
+// The servo for the gripper.
+Servo gripper_servo;
 
 // The current state of the cobot.
 static CobotState state = { .id = CobotState::IDLE, .msg_id = 0 };
@@ -94,7 +93,7 @@ static size_t serial_buffer_in_len = 0;
 static const size_t ERROR_MSG_BUFFER_SIZE = 512;
 
 // The messenger.
-Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::INFO);
+Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::DEBUG);
 
 //                                                                                                //
 // ====================================== Request handlers ====================================== //
@@ -312,13 +311,15 @@ void handle_get_joints(uint32_t request_id)
     return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
   }
 
+  messenger.log(LogLevel::DEBUG, "Sending joint data");
+
   // Create an array of joint entries.
   JointsResponse joints_resp[JOINT_COUNT];
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints_resp[i].angle = static_cast<int32_t>(joints[i].get_position() * 1000);
     joints_resp[i].speed = static_cast<int32_t>(joints[i].get_speed() * 1000);
   }
-  messenger.send_joints_response(request_id, joints_resp, JOINT_COUNT);
+  messenger.send_joints_response(request_id, joints_resp, JOINT_COUNT, gripper_servo.read());
 }
 
 /**
@@ -537,14 +538,15 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
  */
 void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 {
+  static const size_t DATA_LEN = 8 * JOINT_COUNT + 1;
   if (!initialized) {
     return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
   }
-  if (data_len != 8 * JOINT_COUNT) {
+  if (data_len != DATA_LEN) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
                                          "(FOLLOW TRAJECTORY) The payload length should be %u "
                                          "bytes (got %u bytes)",
-                                         8 * JOINT_COUNT, data_len);
+                                         DATA_LEN, data_len);
   }
 
   // Ensure that all new positions are within the joint and speed limits.
@@ -568,6 +570,15 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
                                            "range",
                                            i, speed);
     }
+  }
+
+  // Ensure that the gripper servo angle is within the limits.
+  uint8_t gripper_angle = data[8 * JOINT_COUNT];
+  if (gripper_angle < 0 || (gripper_angle > 180 && gripper_angle != 255)) {
+    return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
+                                         "(FOLLOW TRAJECTORY) Gripper angle %u is out of range "
+                                         "(0-180, or 255 for no change)",
+                                         gripper_angle);
   }
 
   // Make sure all joints are calibrated.
@@ -595,6 +606,11 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
 
     if (speed < 0) speed = -speed;  // Trajectory may include negative speeds.
     joints[i].move_to_speed(angle, speed);
+  }
+
+  // Move the gripper to its target position.
+  if (gripper_angle != 255) {
+    gripper_servo.write(gripper_angle);
   }
 
   // Set the state to FOLLOW_TRAJECTORY and respond to the request with an ACK.
@@ -806,6 +822,43 @@ void handle_set_feedback(uint32_t request_id, const uint8_t* data, uint8_t data_
   }
 }
 
+/**
+ * Handles a SetGripper request.
+ *
+ * @param[in] request_id The ID of the request.
+ * @param[in] data The request data.
+ * @param[in] data_len The length of the data buffer.
+ */
+void handle_set_gripper(uint32_t request_id, const uint8_t* data, uint8_t data_len)
+{
+  if (!initialized) {
+    return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
+  }
+  if (data_len != 1) {
+    return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
+                                         "(SET GRIPPER) The payload length should be 1 byte (got "
+                                         "%u bytes)",
+                                         data_len);
+  }
+
+  uint8_t gripper_angle = data[0];
+
+  if (gripper_angle == 255) {
+    messenger.log(LogLevel::WARN,
+                  "(SET GRIPPER) Called with angle 255, which is reserved as a no-op. Ignoring.");
+    return messenger.send_ack(request_id);
+  }
+
+  if (gripper_angle < 0 || gripper_angle > 180) {
+    return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
+                                         "(SET GRIPPER) Gripper angle %u is out of range (0-180)",
+                                         gripper_angle);
+  }
+
+  gripper_servo.write(gripper_angle);
+  messenger.send_ack(request_id);
+}
+
 //                                                                                                //
 // ================================= Arduino control functions ================================== //
 //                                                                                                //
@@ -815,10 +868,8 @@ void setup()
   // Start serial communication.
   Serial.begin(115200);
 
-#if DEBUGGING
-  // Start debug serial communication.
-  debug.begin(SerialUSB1);
-#endif
+  // Initialize the gripper servo.
+  gripper_servo.attach(GRIPPER_SERVO_PIN);
 
   // Initialize the joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {

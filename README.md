@@ -56,6 +56,7 @@ No payload
 | 0       | Number of joints                         |
 | N + 1-4 | Joint N angle (int32) (deg \* 10^-3)     |
 | N + 5-8 | Joint N speed (int32) (deg \* 10^-3) / s |
+| N + 9   | Gripper servo angle (uint8) (0-180)      |
 
 ## Incoming Message Payloads
 
@@ -110,6 +111,7 @@ For N in [0 - 5]:
 | ------- | ----------------------------------- |
 | N + 0-3 | Target angle (int32) (deg \* 10^-3) |
 | N + 4-7 | Speed (int32) (deg \* 10^-3) / s    |
+| N + 8   | Gripper servo angle (uint8) (0-180) |
 
 ### Stop
 
@@ -139,6 +141,12 @@ No payload
 | Byte | Description                                   |
 | ---- | --------------------------------------------- |
 | 0    | Bitfield of joints to enable/disable feedback |
+
+### Set Gripper
+
+| Byte | Description                         |
+| ---- | ----------------------------------- |
+| 0    | Gripper servo angle (uint8) (0-180) |
 
 # PlatformIO
 

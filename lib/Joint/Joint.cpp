@@ -1,6 +1,5 @@
 #include "Joint.h"
 
-
 Joint::Joint(JointConfig config)
   : config(config)
   , stepper(AccelStepper::DRIVER, config.step_pin, config.dir_pin)

@@ -72,6 +72,7 @@ enum class Request {
   Reset = 9,
   SetLogLevel = 10,
   SetFeedback = 11,
+  SetGripper = 12,
 };
 
 #define MESSAGE_SIZE (BUFFER_SIZE - 3)
@@ -225,10 +226,12 @@ public:
    * @param[in] joints The joints to send.
    * @param[in] num_joints The number of joints to send.
    */
-  void send_joints_response(uint32_t msg_id, JointsResponse* joints, uint8_t num_joints)
+  void send_joints_response(uint32_t msg_id, JointsResponse* joints, uint8_t num_joints,
+                            uint8_t servo_angle)
   {
-    // +1 for response, +1 for response type, +4 for msg_id, +1 for num_joints, +8 for each joint.
-    uint8_t full_message_len = 1 + 1 + 4 + 1 + 8 * num_joints;
+    // +1 for response, +1 for response type, +4 for msg_id, +1 for num_joints, +8 for each joint,
+    // +1 for servo_angle
+    uint8_t full_message_len = 1 + 1 + 4 + 1 + 8 * num_joints + 1;
     if (full_message_len + 3u > BUFFER_SIZE) return;
 
     this->out_message[0] = static_cast<uint8_t>(OutgoingMessage::Response);
@@ -239,6 +242,7 @@ public:
       serialize_int32(this->out_message + 7 + 8 * i, MESSAGE_SIZE, joints[i].angle);
       serialize_int32(this->out_message + 11 + 8 * i, MESSAGE_SIZE, joints[i].speed);
     }
+    this->out_message[7 + 8 * num_joints] = servo_angle;
     int written = framing::frame_message_inline(this->out_buffer, BUFFER_SIZE, full_message_len);
     if (written > 0) Serial.write(this->out_buffer, written);
   }
