@@ -110,6 +110,24 @@ public:
   }
 
   /**
+   * Returns the name of the request type, based off of its enum value.
+   *
+   * @param[in] request The request type.
+   * @return The name of the request type.
+   */
+  const char* get_request_name(uint8_t request)
+  {
+    static const char* const REQUEST_NAMES[] = {
+      "Init",        "Calibrate",        "Override",   "GetJoints", "MoveTo",
+      "MoveSpeed",   "FollowTrajectory", "Stop",       "GoHome",    "Reset",
+      "SetLogLevel", "SetFeedback",      "SetGripper",
+    };
+
+    if (request >= sizeof(REQUEST_NAMES) / sizeof(REQUEST_NAMES[0])) return "Unknown";
+    return REQUEST_NAMES[(request)];
+  }
+
+  /**
    * Writes a log message to Serial if the log level is high enough.
    *
    * @param[in] level The log level of the message.
