@@ -93,7 +93,7 @@ static size_t serial_buffer_in_len = 0;
 static const size_t ERROR_MSG_BUFFER_SIZE = 512;
 
 // The messenger.
-Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::DEBUG);
+Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::INFO);
 
 //                                                                                                //
 // ====================================== Request handlers ====================================== //
@@ -197,7 +197,7 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
   }
 
   // Wait for all joints to stop.
-  while (true) {
+  for (uint32_t i = 0;; ++i) {
     bool all_stopped = true;
     for (auto& joint : joints) {
       joint.update();
@@ -206,6 +206,14 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
       }
     }
     if (all_stopped) break;
+
+    if (i == UINT32_MAX) {
+      messenger.log(LogLevel::WARN, "All joints did not smoothly stop in time. Hard stopping.");
+      for (auto& joint : joints) {
+        joint.stop(false);
+      }
+      break;
+    }
   }
   messenger.log(LogLevel::DEBUG, "All joints stopped");
 
@@ -578,7 +586,7 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
 
   // Ensure that the gripper servo angle is within the limits.
   uint8_t gripper_angle = data[8 * JOINT_COUNT];
-  if (gripper_angle < 0 || (gripper_angle > 180 && gripper_angle != 255)) {
+  if (gripper_angle < 0) {
     return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
                                          "(FOLLOW TRAJECTORY) Gripper angle %u is out of range "
                                          "(0-180, or 255 for no change)",
@@ -613,6 +621,8 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
   }
 
   // Move the gripper to its target position.
+  if (gripper_angle < 30) gripper_angle = 30;
+  if (gripper_angle > 160) gripper_angle = 160;
   if (gripper_angle != 255) {
     gripper_servo.write(gripper_angle);
   }
@@ -859,6 +869,8 @@ void handle_set_gripper(uint32_t request_id, const uint8_t* data, uint8_t data_l
                                          gripper_angle);
   }
 
+  if (gripper_angle < 30) gripper_angle = 30;
+  if (gripper_angle > 160) gripper_angle = 160;
   gripper_servo.write(gripper_angle);
   messenger.send_ack(request_id);
 }
