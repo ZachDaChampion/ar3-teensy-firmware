@@ -59,7 +59,7 @@ public:
    * the interval, or until the limit switch is released (whichever comes first).
    *
    * @param[in] interval The interval to read the limit switch at.
-   * @param [in] samples The number of samples to take.
+   * @param[in] samples The number of samples to take.
    * @return `1` if the limit switch was pressed for the entire duration of the interval, `0`
    * otherwise.
    */
