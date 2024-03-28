@@ -10,6 +10,10 @@
 
 #include <Joint.h>
 
+// clang-format off
+
+static const int GRIPPER_SERVO_PIN = 13;
+
 static Joint joints[] = {
   Joint({
     .id = 0,
@@ -22,7 +26,7 @@ static Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 2048,
+    .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 40.0,
     .enc_reduction = 40.0,
@@ -54,7 +58,7 @@ static Joint joints[] = {
     .goto_after_calibrate = -2000,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 2048,
+    .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
@@ -86,7 +90,7 @@ static Joint joints[] = {
     .goto_after_calibrate = 3500,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 2048,
+    .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
@@ -118,7 +122,7 @@ static Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 2048,
+    .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 39.2,
     .enc_reduction = 39.2,
@@ -150,7 +154,7 @@ static Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 800,
-    .enc_ticks_per_rev = 2048,
+    .enc_ticks_per_rev = 2000, // max 3000 RPM, DIP switches 0100
 
     .motor_reduction = 9.1455,
     .enc_reduction = 9.1455,
@@ -182,7 +186,7 @@ static Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 2048,
+    .enc_ticks_per_rev = 640, // max 6000 RPM, DIP switches 0011
 
     .motor_reduction = 19.0,
     .enc_reduction = 19.0,
@@ -203,3 +207,5 @@ static Joint joints[] = {
     .lim_pin = 31,
   })
 };
+
+// clang-format on

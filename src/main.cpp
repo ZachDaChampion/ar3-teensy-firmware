@@ -18,11 +18,7 @@
 #include <framing.h>
 #include <Messenger.h>
 #include <serialize.h>
-
-#if DEBUGGING
-#include "TeensyDebug.h"
-#pragma GCC optimize("O0")
-#endif
+#include <PWMServo.h>
 
 #if COBOT_ID == 0
 #include "joints-cobot0.cpp"
@@ -70,7 +66,7 @@ struct CobotState {
 
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
-#define FW_VERSION 5
+#define FW_VERSION 6
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
@@ -78,6 +74,9 @@ static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
 //                                                                                                //
 // ======================================== Global data ========================================= //
 //                                                                                                //
+
+// The servo for the gripper.
+PWMServo gripper_servo;
 
 // The current state of the cobot.
 static CobotState state = { .id = CobotState::IDLE, .msg_id = 0 };
@@ -123,6 +122,7 @@ void handle_init(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 
   if (expected_fw_version == FW_VERSION) {
     initialized = true;
+    messenger.log(LogLevel::INFO, "Initialized (firmware version %lu)", FW_VERSION);
     return messenger.send_ack(request_id);
   } else {
     return messenger.send_error_response(request_id, ErrorCode::INVALID_FIRMWARE_VERSION,
@@ -191,12 +191,13 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
   }
 
   // Stop all joints.
+  messenger.log(LogLevel::DEBUG, "Stopping all joints for calibration");
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].stop(true);
   }
 
   // Wait for all joints to stop.
-  while (true) {
+  for (uint32_t i = 0;; ++i) {
     bool all_stopped = true;
     for (auto& joint : joints) {
       joint.update();
@@ -205,12 +206,22 @@ void handle_calibrate(uint32_t request_id, const uint8_t* data, uint8_t data_len
       }
     }
     if (all_stopped) break;
+
+    if (i == UINT32_MAX) {
+      messenger.log(LogLevel::WARN, "All joints did not smoothly stop in time. Hard stopping.");
+      for (auto& joint : joints) {
+        joint.stop(false);
+      }
+      break;
+    }
   }
+  messenger.log(LogLevel::DEBUG, "All joints stopped");
 
   // Set the calibrating bitfield so that the update loop knows which joints to calibrate.
   state.calibrating.joint_bitfield = joints_bf;
 
   // Set the state to CALIBRATING and respond to the request with an ACK.
+  messenger.log(LogLevel::DEBUG, "Starting calibration");
   state.id = CobotState::CALIBRATING;
   state.msg_id = request_id;
   messenger.send_ack(request_id);
@@ -312,13 +323,15 @@ void handle_get_joints(uint32_t request_id)
     return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
   }
 
+  messenger.log(LogLevel::DEBUG, "Sending joint data");
+
   // Create an array of joint entries.
   JointsResponse joints_resp[JOINT_COUNT];
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints_resp[i].angle = static_cast<int32_t>(joints[i].get_position() * 1000);
     joints_resp[i].speed = static_cast<int32_t>(joints[i].get_speed() * 1000);
   }
-  messenger.send_joints_response(request_id, joints_resp, JOINT_COUNT);
+  messenger.send_joints_response(request_id, joints_resp, JOINT_COUNT, gripper_servo.read());
 }
 
 /**
@@ -537,14 +550,15 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
  */
 void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 {
+  static const size_t DATA_LEN = 8 * JOINT_COUNT + 1;
   if (!initialized) {
     return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
   }
-  if (data_len != 8 * JOINT_COUNT) {
+  if (data_len != DATA_LEN) {
     return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
                                          "(FOLLOW TRAJECTORY) The payload length should be %u "
                                          "bytes (got %u bytes)",
-                                         8 * JOINT_COUNT, data_len);
+                                         DATA_LEN, data_len);
   }
 
   // Ensure that all new positions are within the joint and speed limits.
@@ -568,6 +582,15 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
                                            "range",
                                            i, speed);
     }
+  }
+
+  // Ensure that the gripper servo angle is within the limits.
+  uint8_t gripper_angle = data[8 * JOINT_COUNT];
+  if (gripper_angle < 0) {
+    return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
+                                         "(FOLLOW TRAJECTORY) Gripper angle %u is out of range "
+                                         "(0-180, or 255 for no change)",
+                                         gripper_angle);
   }
 
   // Make sure all joints are calibrated.
@@ -595,6 +618,13 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
 
     if (speed < 0) speed = -speed;  // Trajectory may include negative speeds.
     joints[i].move_to_speed(angle, speed);
+  }
+
+  // Move the gripper to its target position.
+  if (gripper_angle < 30) gripper_angle = 30;
+  if (gripper_angle > 160) gripper_angle = 160;
+  if (gripper_angle != 255) {
+    gripper_servo.write(gripper_angle);
   }
 
   // Set the state to FOLLOW_TRAJECTORY and respond to the request with an ACK.
@@ -806,6 +836,45 @@ void handle_set_feedback(uint32_t request_id, const uint8_t* data, uint8_t data_
   }
 }
 
+/**
+ * Handles a SetGripper request.
+ *
+ * @param[in] request_id The ID of the request.
+ * @param[in] data The request data.
+ * @param[in] data_len The length of the data buffer.
+ */
+void handle_set_gripper(uint32_t request_id, const uint8_t* data, uint8_t data_len)
+{
+  if (!initialized) {
+    return messenger.send_error_response(request_id, ErrorCode::NOT_INITIALIZED, "");
+  }
+  if (data_len != 1) {
+    return messenger.send_error_response(request_id, ErrorCode::MALFORMED_REQUEST,
+                                         "(SET GRIPPER) The payload length should be 1 byte (got "
+                                         "%u bytes)",
+                                         data_len);
+  }
+
+  uint8_t gripper_angle = data[0];
+
+  if (gripper_angle == 255) {
+    messenger.log(LogLevel::WARN,
+                  "(SET GRIPPER) Called with angle 255, which is reserved as a no-op. Ignoring.");
+    return messenger.send_ack(request_id);
+  }
+
+  if (gripper_angle < 0 || gripper_angle > 180) {
+    return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
+                                         "(SET GRIPPER) Gripper angle %u is out of range (0-180)",
+                                         gripper_angle);
+  }
+
+  if (gripper_angle < 30) gripper_angle = 30;
+  if (gripper_angle > 160) gripper_angle = 160;
+  gripper_servo.write(gripper_angle);
+  messenger.send_ack(request_id);
+}
+
 //                                                                                                //
 // ================================= Arduino control functions ================================== //
 //                                                                                                //
@@ -815,10 +884,8 @@ void setup()
   // Start serial communication.
   Serial.begin(115200);
 
-#if DEBUGGING
-  // Start debug serial communication.
-  debug.begin(SerialUSB1);
-#endif
+  // Initialize the gripper servo.
+  gripper_servo.attach(GRIPPER_SERVO_PIN);
 
   // Initialize the joints.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
@@ -899,17 +966,15 @@ void loop()
   while (serial_buffer_in_len < SERIAL_BUFFER_SIZE) {
     int x = Serial.read();
     if (x == -1) break;
-    if (message_in_progress || x == START_BYTE) {
-      message_in_progress = true;
-      serial_buffer_in[serial_buffer_in_len++] = x;
-    }
+    if (x == START_BYTE) message_in_progress = true;
+    if (message_in_progress) serial_buffer_in[serial_buffer_in_len++] = x;
   }
 
   // Try parsing a message.
   int msg_len = framing::check_message(serial_buffer_in, serial_buffer_in_len);
   if (msg_len == 0) return;  // Message is incomplete
 
-  // If the message is invalid, send an error log message and  discard it.
+  // If the message is invalid, send an error log message and discard it.
   if (msg_len == -1) {
     messenger.log(LogLevel::WARN, "Invalid message received.");
     serial_buffer_in_len = framing::remove_bad_frame(serial_buffer_in, serial_buffer_in_len);
@@ -929,6 +994,8 @@ void loop()
   deserialize_int32(&request_id, msg + 1);
 
   // Handle the request.
+  messenger.log(LogLevel::DEBUG, "Handling request %u (%s)", request_id,
+                messenger.get_request_name(request_type));
   switch (request_type) {
     case static_cast<uint8_t>(Request::Init):
       handle_init(request_id, msg + 5, msg_payload_len);
@@ -965,6 +1032,9 @@ void loop()
       break;
     case static_cast<uint8_t>(Request::SetFeedback):
       handle_set_feedback(request_id, msg + 5, msg_payload_len);
+      break;
+    case static_cast<uint8_t>(Request::SetGripper):
+      handle_set_gripper(request_id, msg + 5, msg_payload_len);
       break;
 
     default:

@@ -1,6 +1,5 @@
 #include "Joint.h"
 
-
 Joint::Joint(JointConfig config)
   : config(config)
   , stepper(AccelStepper::DRIVER, config.step_pin, config.dir_pin)
@@ -42,7 +41,10 @@ float Joint::get_position()
 
 float Joint::get_speed()
 {
-  return measured_speed;
+  if (encoder_feedback_enabled)
+    return measured_speed;
+  else
+    return stepper.speed() * motor_deg_per_step;
 }
 
 void Joint::move_to_auto(int32_t target)
@@ -170,7 +172,7 @@ void Joint::update()
       break;
 
     case State::STOPPING:
-      if (!stepper.isRunning()) {
+      if (stepper.speed() == 0) {
         if (encoder_feedback_enabled) fix_stepper_position();
         state.id = State::IDLE;
         break;
@@ -231,21 +233,23 @@ void Joint::update()
    * last update. This way, the filter is independent of the update rate.
    */
 
-  int32_t encoder_pos = encoder.read() * config.direction;
-  float dt = micros_timer / 1000000.0f;
-  if (dt == 0) return;
-  micros_timer = 0;
+  if (encoder_feedback_enabled) {
+    float dt = micros_timer / 1000000.0f;
+    if (dt == 0) return;
+    micros_timer = 0;
 
-  float unfiltered_speed = (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
-  float scaled_filter_strength = config.speed_filter_strength * dt;
+    const int32_t encoder_pos = encoder.read() * config.direction;
+    const float unfiltered_speed = (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
+    last_encoder_pos = encoder_pos;
 
-  if (scaled_filter_strength >= 1) {
-    measured_speed = unfiltered_speed;
-  } else {
-    measured_speed =
-      measured_speed * (1 - scaled_filter_strength) + unfiltered_speed * scaled_filter_strength;
+    const float scaled_filter_strength = config.speed_filter_strength * dt;
+    if (scaled_filter_strength >= 1) {
+      measured_speed = unfiltered_speed;
+    } else {
+      measured_speed =
+        measured_speed * (1 - scaled_filter_strength) + unfiltered_speed * scaled_filter_strength;
+    }
   }
-  last_encoder_pos = encoder_pos;
 }
 
 void Joint::fix_stepper_position()
