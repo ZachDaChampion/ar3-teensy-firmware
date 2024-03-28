@@ -1,4 +1,5 @@
 #include "Joint.h"
+#include <Arduino.h>
 
 Joint::Joint(JointConfig config)
   : config(config)
@@ -69,5 +70,11 @@ const JointConfig& Joint::get_config() const
 
 bool Joint::limit_switch_pressed()
 {
+  // Flush the filter buffer
+  for (int i = 0; i < 8; ++i) {
+    limit_switch.read();
+    delay(1);
+  }
+
   return limit_switch.read() == 1;
 }
