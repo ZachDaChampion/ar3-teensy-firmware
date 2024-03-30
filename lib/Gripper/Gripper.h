@@ -59,6 +59,13 @@ public:
    */
   bool position_within_range(int angle) const;
 
+  /**
+   * Get a string representation of this gripper's position range.
+   *
+   * @return A string representation of this gripper's position range.
+   */
+  String position_range_str() const;
+
 private:
   PWMServo servo_;
 

@@ -8,8 +8,9 @@
  * Joint configurations for COBOT 0.
  */
 
-#include <Gripper.h>
-#include <Joint.h>
+#if COBOT_ID == 0
+
+#include "config.h"
 
 Gripper gripper({
   .pin = 13,
@@ -215,3 +216,5 @@ Joint joints[] = {
 };
 
 // clang-format on
+
+#endif

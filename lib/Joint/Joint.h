@@ -195,6 +195,20 @@ public:
   bool speed_within_range(int32_t speed);
 
   /**
+   * Get a string representation of this joint's position range.
+   *
+   * @return A string representation of this joint's position range.
+   */
+  String position_range_str() const;
+
+  /**
+   * Get a string representation of this joint's speed range.
+   *
+   * @return A string representation of this joint's speed range.
+   */
+  String speed_range_str() const;
+
+  /**
    * Reset the joint. This will stop the joint immediateyl and mark it as uncalibrated.
    */
   void reset();

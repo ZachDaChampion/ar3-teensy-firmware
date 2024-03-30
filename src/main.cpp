@@ -20,16 +20,9 @@
 #include <framing.h>
 #include <serialize.h>
 
-#if COBOT_ID == 0
-#include "joints-cobot0.cpp"
-#endif
-
-#if COBOT_ID == 1
-#include "joints-cobot1.cpp"
-#endif
+#include "config.h"
 
 #define SIZE(x) (sizeof(x) / sizeof(x[0]))
-#define JOINT_COUNT SIZE(joints)
 
 /**
  * A state of the cobot. This is comprised of a state ID and a message ID. The message ID is used to
@@ -282,8 +275,8 @@ void handle_override(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     deserialize_int32(&angle, entry + 1);
     if (!joints[i].position_within_range(angle)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "(OVERRIDE) Joint %u position %ld is out of range", i,
-                                           angle);
+                                           "(OVERRIDE) Joint %u position %ld is out of range %s", i,
+                                           angle, joints[i].position_range_str().c_str());
     }
   }
 
@@ -395,7 +388,8 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
 
     if (!joints[i].position_within_range(angle)) {
       char msg[128];
-      snprintf(msg, 128, "(MOVE TO) Joint %u position %ld is out of range", i, angle);
+      snprintf(msg, 128, "(MOVE TO) Joint %u position %ld is out of range %s", i, angle,
+               joints[i].position_range_str().c_str());
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE, msg);
     }
     if (speed < 0) {
@@ -404,8 +398,8 @@ void handle_move_to(uint32_t request_id, const uint8_t* data, uint8_t data_len)
     }
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "(MOVE TO) Joint %u speed %ld is out of range", i,
-                                           speed);
+                                           "(MOVE TO) Joint %u speed %ld is out of range %s", i,
+                                           speed, joints[i].speed_range_str().c_str());
     }
   }
 
@@ -508,8 +502,8 @@ void handle_move_speed(uint32_t request_id, const uint8_t* data, uint8_t data_le
 
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                           "(MOVE SPEED) Joint %u speed %ld is out of range", i,
-                                           speed);
+                                           "(MOVE SPEED) Joint %u speed %ld is out of range %s", i,
+                                           speed, joints[i].speed_range_str().c_str());
     }
   }
 
@@ -571,14 +565,14 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
     if (!joints[i].position_within_range(angle)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
                                            "(FOLLOW TRAJECTORY) Joint %u position %ld is out of "
-                                           "range",
-                                           i, angle);
+                                           "range %d",
+                                           i, angle, joints[i].position_range_str().c_str());
     }
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
                                            "(FOLLOW TRAJECTORY) Joint %u speed %ld is out of "
                                            "range",
-                                           i, speed);
+                                           i, speed, joints[i].speed_range_str().c_str());
     }
   }
 
@@ -586,8 +580,8 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
   uint8_t gripper_angle = data[8 * JOINT_COUNT];
   if (gripper_angle != 255 && !gripper.position_within_range(gripper_angle)) {
     return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                         "(FOLLOW TRAJECTORY) Gripper angle %u is out of range",
-                                         gripper_angle);
+                                         "(FOLLOW TRAJECTORY) Gripper angle %u is out of range %s",
+                                         gripper_angle, gripper.position_range_str().c_str());
   }
 
   // Make sure all joints are calibrated.
@@ -860,8 +854,8 @@ void handle_set_gripper(uint32_t request_id, const uint8_t* data, uint8_t data_l
 
   if (!gripper.position_within_range(gripper_angle)) {
     return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                         "(SET GRIPPER) Gripper angle %u is out of range",
-                                         gripper_angle);
+                                         "(SET GRIPPER) Gripper angle %u is out of range %s",
+                                         gripper_angle, gripper.position_range_str().c_str());
   }
 
   gripper.move_to(gripper_angle);

@@ -151,6 +151,17 @@ bool Joint::speed_within_range(int32_t speed)
   return (speed_f >= -config.max_speed) && (speed_f <= config.max_speed);
 }
 
+String Joint::position_range_str() const
+{
+  return "[" + String(config.min_steps * motor_deg_per_step) + ", " +
+         String(config.max_steps * motor_deg_per_step) + "]";
+}
+
+String Joint::speed_range_str() const
+{
+  return "[" + String(-config.max_speed) + ", " + String(config.max_speed) + "]";
+}
+
 void Joint::reset()
 {
   state.id = State::IDLE;

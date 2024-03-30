@@ -46,3 +46,8 @@ bool Gripper::position_within_range(int angle) const
 {
   return angle >= config.min_angle && angle <= config.max_angle;
 }
+
+String Gripper::position_range_str() const
+{
+  return "[" + String(config.min_angle) + ", " + String(config.max_angle) + "]";
+}
