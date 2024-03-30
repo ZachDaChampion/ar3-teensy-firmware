@@ -9,8 +9,8 @@
 #ifndef AR3_TEENSY_FIRMWARE__SERIALIZE_H
 #define AR3_TEENSY_FIRMWARE__SERIALIZE_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * Serialize a int8 into a buffer.

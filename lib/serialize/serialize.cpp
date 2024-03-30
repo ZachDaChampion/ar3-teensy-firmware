@@ -1,12 +1,13 @@
 /**
  * @file serialize.cpp
  * @author Zach Champion (zachchampion79@gmail.com)
- * 
+ *
  * @version 2.0
  * @date 2023-09-19
  */
 
 #include "serialize.h"
+
 #include <cstring>
 
 int serialize_int8(uint8_t* const dest, const size_t dest_size, const int8_t val)

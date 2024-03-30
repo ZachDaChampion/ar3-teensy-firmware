@@ -14,11 +14,11 @@
  */
 
 #include <Arduino.h>
+#include <Gripper.h>
 #include <Joint.h>
-#include <framing.h>
 #include <Messenger.h>
+#include <framing.h>
 #include <serialize.h>
-#include <PWMServo.h>
 
 #if COBOT_ID == 0
 #include "joints-cobot0.cpp"
@@ -74,9 +74,6 @@ static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
 //                                                                                                //
 // ======================================== Global data ========================================= //
 //                                                                                                //
-
-// The servo for the gripper.
-PWMServo gripper_servo;
 
 // The current state of the cobot.
 static CobotState state = { .id = CobotState::IDLE, .msg_id = 0 };
@@ -331,7 +328,8 @@ void handle_get_joints(uint32_t request_id)
     joints_resp[i].angle = static_cast<int32_t>(joints[i].get_position() * 1000);
     joints_resp[i].speed = static_cast<int32_t>(joints[i].get_speed() * 1000);
   }
-  messenger.send_joints_response(request_id, joints_resp, JOINT_COUNT, gripper_servo.read());
+  messenger.send_joints_response(request_id, joints_resp, JOINT_COUNT,
+                                 gripper.get_position_estimate());
 }
 
 /**
@@ -586,10 +584,9 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
 
   // Ensure that the gripper servo angle is within the limits.
   uint8_t gripper_angle = data[8 * JOINT_COUNT];
-  if (gripper_angle < 0) {
+  if (gripper_angle != 255 && !gripper.position_within_range(gripper_angle)) {
     return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                         "(FOLLOW TRAJECTORY) Gripper angle %u is out of range "
-                                         "(0-180, or 255 for no change)",
+                                         "(FOLLOW TRAJECTORY) Gripper angle %u is out of range",
                                          gripper_angle);
   }
 
@@ -621,10 +618,8 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
   }
 
   // Move the gripper to its target position.
-  if (gripper_angle < 30) gripper_angle = 30;
-  if (gripper_angle > 160) gripper_angle = 160;
   if (gripper_angle != 255) {
-    gripper_servo.write(gripper_angle);
+    gripper.move_to(gripper_angle);
   }
 
   // Set the state to FOLLOW_TRAJECTORY and respond to the request with an ACK.
@@ -863,15 +858,13 @@ void handle_set_gripper(uint32_t request_id, const uint8_t* data, uint8_t data_l
     return messenger.send_ack(request_id);
   }
 
-  if (gripper_angle < 0 || gripper_angle > 180) {
+  if (!gripper.position_within_range(gripper_angle)) {
     return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
-                                         "(SET GRIPPER) Gripper angle %u is out of range (0-180)",
+                                         "(SET GRIPPER) Gripper angle %u is out of range",
                                          gripper_angle);
   }
 
-  if (gripper_angle < 30) gripper_angle = 30;
-  if (gripper_angle > 160) gripper_angle = 160;
-  gripper_servo.write(gripper_angle);
+  gripper.move_to(gripper_angle);
   messenger.send_ack(request_id);
 }
 
@@ -881,13 +874,8 @@ void handle_set_gripper(uint32_t request_id, const uint8_t* data, uint8_t data_l
 
 void setup()
 {
-  // Start serial communication.
   Serial.begin(115200);
-
-  // Initialize the gripper servo.
-  gripper_servo.attach(GRIPPER_SERVO_PIN);
-
-  // Initialize the joints.
+  gripper.init();
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     joints[i].init();
   }

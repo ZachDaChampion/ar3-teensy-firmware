@@ -8,13 +8,19 @@
  * Joint configurations for COBOT 0.
  */
 
+#include <Gripper.h>
 #include <Joint.h>
+
+Gripper gripper({
+  .pin = 13,
+  .min_angle = 30,
+  .max_angle = 160,
+  .avg_speed = 400,
+});
 
 // clang-format off
 
-static const int GRIPPER_SERVO_PIN = 13;
-
-static Joint joints[] = {
+Joint joints[] = {
   Joint({
     .id = 0,
     .name = "base",
