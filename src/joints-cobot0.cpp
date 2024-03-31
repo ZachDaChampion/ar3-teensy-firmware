@@ -26,9 +26,9 @@ Joint joints[] = {
     .id = 0,
     .name = "base",
 
-    .min_steps = -7477,
-    .max_steps = 4600,
-    .ref_steps = -7477,
+    .min_steps = -7425,
+    .max_steps = 6250,
+    .ref_steps = -7425,
     
     .goto_after_calibrate = 0,
 
@@ -58,11 +58,11 @@ Joint joints[] = {
     .id = 1,
     .name = "shoulder",
 
-    .min_steps = -2450,
-    .max_steps = 3200,
+    .min_steps = -2350,
+    .max_steps = 4000,
     .ref_steps = -2450,
     
-    .goto_after_calibrate = -2000,
+    .goto_after_calibrate = -1750,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
@@ -90,9 +90,9 @@ Joint joints[] = {
     .id = 2,
     .name = "elbow",
 
-    .min_steps = -7000,
-    .max_steps = 8056,
-    .ref_steps = 8056,
+    .min_steps = -8000,
+    .max_steps = 8100,
+    .ref_steps = 8100,
     
     .goto_after_calibrate = 3500,
 
@@ -122,7 +122,7 @@ Joint joints[] = {
     .id = 3,
     .name = "forearm roll",
 
-    .min_steps = -6000,
+    .min_steps = -4250,
     .max_steps = 7046,
     .ref_steps = 7046,
     
@@ -154,9 +154,9 @@ Joint joints[] = {
     .id = 4,
     .name = "wrist pitch",
 
-    .min_steps = -2000,
-    .max_steps = 2000,
-    .ref_steps = -1850,
+    .min_steps = -1750,
+    .max_steps = 2250,
+    .ref_steps = -1750,
     
     .goto_after_calibrate = 0,
 
