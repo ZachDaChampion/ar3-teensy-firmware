@@ -59,7 +59,7 @@ struct CobotState {
 
 // The firmware version. This must be incremented whenever the firmware is updated, especially if
 // the binary protocol changes.
-#define FW_VERSION 6
+#define FW_VERSION 7
 
 // The order in which joints are calibrated.
 static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
@@ -565,13 +565,13 @@ void handle_follow_trajectory(uint32_t request_id, const uint8_t* data, uint8_t 
     if (!joints[i].position_within_range(angle)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
                                            "(FOLLOW TRAJECTORY) Joint %u position %ld is out of "
-                                           "range %d",
+                                           "range %s",
                                            i, angle, joints[i].position_range_str().c_str());
     }
     if (!joints[i].speed_within_range(speed)) {
       return messenger.send_error_response(request_id, ErrorCode::OUT_OF_RANGE,
                                            "(FOLLOW TRAJECTORY) Joint %u speed %ld is out of "
-                                           "range",
+                                           "range %s",
                                            i, speed, joints[i].speed_range_str().c_str());
     }
   }
