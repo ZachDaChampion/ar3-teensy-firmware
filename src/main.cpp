@@ -117,6 +117,20 @@ Command commands[] = {
         joints[selected_joint].move_to_limit_switch(arg && arg[0] == 'r');
       },
   },
+  Command{
+    .name = "override",
+    .abbreviation = 'o',
+    .description = "Override the current position of the joint",
+    .function =
+      [](const char* arg) {
+        if (selected_joint == -1) {
+          Serial.println("No joint selected");
+          return;
+        }
+        long position = atol(arg);
+        joints[selected_joint].override_position(position);
+      },
+  },
 };
 
 //                                                                                                //
@@ -125,6 +139,9 @@ Command commands[] = {
 
 void setup()
 {
+  Serial.begin(115200);
+  Serial.setTimeout(UINT32_MAX);
+
   for (auto& joint : joints) {
     joint.init();
   }
