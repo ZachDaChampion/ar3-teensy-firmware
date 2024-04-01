@@ -1,29 +1,7 @@
-/**
- * @file joints-cobot0.cpp
- * @author Zach Champion (zachchampion79@gmail.com)
- *
- * @version 1.0
- * @date 2023-09-10
- *
- * Joint configurations for COBOT 0.
- */
+import math
 
-#if COBOT_ID == 0
-
-#include "config.h"
-
-Gripper gripper({
-  .pin = 13,
-  .min_angle = 0,
-  .max_angle = 180,
-  .avg_speed = 450,
-});
-
-// clang-format off
-
-Joint joints[] = {
-  Joint({
-    .id = 0,
+raw = [
+    """.id = 0,
     .name = "base",
 
     .min_steps = -7425,
@@ -51,11 +29,8 @@ Joint joints[] = {
 
     .speed_filter_strength = 5.0,
 
-    .lim_pin = 26,
-  }),
-  
-  Joint({
-    .id = 1,
+    .lim_pin = 26,""",
+    """.id = 1,
     .name = "shoulder",
 
     .min_steps = -2350,
@@ -83,11 +58,8 @@ Joint joints[] = {
 
     .speed_filter_strength = 5.0,
 
-    .lim_pin = 27,
-  }),
-  
-  Joint({
-    .id = 2,
+    .lim_pin = 27,""",
+    """.id = 2,
     .name = "elbow",
 
     .min_steps = -8000,
@@ -115,11 +87,8 @@ Joint joints[] = {
 
     .speed_filter_strength = 5.0,
 
-    .lim_pin = 28,
-  }),
-  
-  Joint({
-    .id = 3,
+    .lim_pin = 28,""",
+    """.id = 3,
     .name = "forearm roll",
 
     .min_steps = -4250,
@@ -147,11 +116,8 @@ Joint joints[] = {
 
     .speed_filter_strength = 5.0,
 
-    .lim_pin = 29,
-  }),
-  
-  Joint({
-    .id = 4,
+    .lim_pin = 29,""",
+    """.id = 4,
     .name = "wrist pitch",
 
     .min_steps = -1750,
@@ -179,11 +145,8 @@ Joint joints[] = {
 
     .speed_filter_strength = 5.0,
 
-    .lim_pin = 30,
-  }),
-  
-  Joint({
-    .id = 5,
+    .lim_pin = 30,""",
+    """.id = 5,
     .name = "wrist roll",
 
     .min_steps = -3000,
@@ -211,10 +174,43 @@ Joint joints[] = {
 
     .speed_filter_strength = 5.0,
 
-    .lim_pin = 31,
-  })
-};
+    .lim_pin = 31,"""
+]
 
-// clang-format on
 
-#endif
+def extract(entry):
+    # Extract id, name, min_steps, max_steps, motor_steps_per_rev, motor_reduction, direction,
+    # max_speed, max_accel entry and return them as a dictionary
+
+    return {
+        "id": int(entry.split(".id = ")[1].split(",")[0]),
+        "name": entry.split(".name = ")[1].split(",")[0].strip('"'),
+        "min_steps": int(entry.split(".min_steps = ")[1].split(",")[0]),
+        "max_steps": int(entry.split(".max_steps = ")[1].split(",")[0]),
+        "motor_steps_per_rev": int(entry.split(".motor_steps_per_rev = ")[1].split(",")[0]),
+        "motor_reduction": float(entry.split(".motor_reduction = ")[1].split(",")[0]),
+        "direction": int(entry.split(".direction = ")[1].split(",")[0]),
+        "max_speed": float(entry.split(".max_speed = ")[1].split(",")[0]),
+        "max_accel": float(entry.split(".max_accel = ")[1].split(",")[0]),
+    }
+
+def process(entry):
+    # Solve for min and max degrees
+    min_deg = entry["min_steps"] / entry["motor_steps_per_rev"] / entry["motor_reduction"] * 360
+    max_deg = entry["max_steps"] / entry["motor_steps_per_rev"] / entry["motor_reduction"] * 360
+    if entry["direction"] == -1:
+        min_deg, max_deg = -max_deg, -min_deg
+    return (min_deg, max_deg)
+
+for entry in raw:
+    extracted = extract(entry)
+    (min_deg, max_deg) = process(extracted)
+    max_speed_rad = math.radians(extracted["max_speed"] - 2)
+    max_accel_rad = math.radians(extracted["max_accel"])
+    print(f"{extracted['name']} ({extracted['id']}):\n" + 
+    "  Min degrees: {:.4f} deg\n".format(min_deg) +
+    "  Max degrees: {:.4f} deg\n".format(max_deg) +
+    "  Max speed: {:.4f} deg/sec\n".format(extracted["max_speed"]) +
+    "  Max speed: {:.4f} rad/sec\n".format(max_speed_rad) +
+    "  Max acceleration: {:.4f} deg/sec^2\n".format(extracted["max_accel"]) +
+    "  Max acceleration: {:.4f} rad/sec^2\n".format(max_accel_rad))
