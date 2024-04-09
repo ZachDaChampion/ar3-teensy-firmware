@@ -9,8 +9,8 @@
 #ifndef AR3_TEENSY_FIRMWARE__FRAMING_H
 #define AR3_TEENSY_FIRMWARE__FRAMING_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define START_BYTE 0x24
 

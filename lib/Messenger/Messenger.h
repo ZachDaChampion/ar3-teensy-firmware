@@ -9,8 +9,8 @@
 #ifndef AR3_TEENSY_FIRMWARE__MESSENGER_H
 #define AR3_TEENSY_FIRMWARE__MESSENGER_H
 
-#include <framing.h>
 #include <Arduino.h>
+#include <framing.h>
 #include <serialize.h>
 
 /**

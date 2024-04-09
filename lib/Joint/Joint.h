@@ -9,10 +9,10 @@
 #ifndef AR3_TEENSY_FIRMWARE__JOINT_HPP
 #define AR3_TEENSY_FIRMWARE__JOINT_HPP
 
-#include <stdint.h>
 #include <AccelStepper.h>
 #include <Encoder.h>
 #include <LimitSwitch.h>
+#include <stdint.h>
 
 struct JointConfig {
   uint8_t id;        // ID of the joint (0-5)
@@ -58,6 +58,8 @@ struct JointConfig {
 class Joint
 {
 public:
+  JointConfig config;
+
   /**
    * A state that the joint can be in.
    */
@@ -193,6 +195,20 @@ public:
   bool speed_within_range(int32_t speed);
 
   /**
+   * Get a string representation of this joint's position range.
+   *
+   * @return A string representation of this joint's position range.
+   */
+  String position_range_str() const;
+
+  /**
+   * Get a string representation of this joint's speed range.
+   *
+   * @return A string representation of this joint's speed range.
+   */
+  String speed_range_str() const;
+
+  /**
    * Reset the joint. This will stop the joint immediateyl and mark it as uncalibrated.
    */
   void reset();
@@ -224,7 +240,6 @@ private:
   float enc_ticks_per_step;
 
   State state;
-  JointConfig config;
   bool is_calibrated;
   bool encoder_feedback_enabled;
   float measured_speed;

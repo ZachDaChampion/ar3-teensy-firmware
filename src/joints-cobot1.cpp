@@ -8,7 +8,9 @@
  * Joint configurations for COBOT 0.
  */
 
-#include <Joint.h>
+#if COBOT_ID == 1
+
+#include "config.h"
 
 // clang-format off
 
@@ -209,3 +211,5 @@ static Joint joints[] = {
 };
 
 // clang-format on
+
+#endif
