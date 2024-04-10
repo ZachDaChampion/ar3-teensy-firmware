@@ -15,7 +15,8 @@
     "unordered_set": "cpp",
     "vector": "cpp",
     "initializer_list": "cpp",
-    "span": "cpp"
+    "span": "cpp",
+    "variant": "cpp"
   },
   "[python]": {
     "editor.defaultFormatter": "ms-python.autopep8"

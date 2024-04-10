@@ -33,10 +33,8 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 40.0,
-    .enc_reduction = 40.0,
 
     .direction = -1,
 
@@ -46,8 +44,10 @@ Joint joints[] = {
 
     .step_pin = 0,
     .dir_pin = 1,
-    .enc_a_pin = 14,
-    .enc_b_pin = 15,
+
+    .encoder_config = {
+      .type = EncoderConfig::NONE,
+    },
 
     .speed_filter_strength = 5.0,
 
@@ -65,10 +65,8 @@ Joint joints[] = {
     .goto_after_calibrate = -1750,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 50.0,
-    .enc_reduction = 50.0,
 
     .direction = 1,
 
@@ -78,8 +76,10 @@ Joint joints[] = {
 
     .step_pin = 2,
     .dir_pin = 3,
-    .enc_a_pin = 16,
-    .enc_b_pin = 17,
+
+    .encoder_config = {
+      .type = EncoderConfig::NONE,
+    },
 
     .speed_filter_strength = 5.0,
 
@@ -97,10 +97,8 @@ Joint joints[] = {
     .goto_after_calibrate = 3500,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 50.0,
-    .enc_reduction = 50.0,
 
     .direction = 1,
 
@@ -110,8 +108,16 @@ Joint joints[] = {
 
     .step_pin = 4,
     .dir_pin = 5,
-    .enc_a_pin = 18,
-    .enc_b_pin = 19,
+
+    .encoder_config = {
+      .type = EncoderConfig::MAGNETIC,
+      .magnetic = {
+        .bus = &Wire,
+        .counterclockwise = false,
+        .offset = 0,
+        .dir_pin = 255,
+      },
+    },
 
     .speed_filter_strength = 5.0,
 
@@ -129,10 +135,8 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
 
     .motor_reduction = 39.2,
-    .enc_reduction = 39.2,
 
     .direction = -1,
 
@@ -142,8 +146,10 @@ Joint joints[] = {
 
     .step_pin = 6,
     .dir_pin = 7,
-    .enc_a_pin = 20,
-    .enc_b_pin = 21,
+
+    .encoder_config = {
+      .type = EncoderConfig::NONE,
+    },
 
     .speed_filter_strength = 5.0,
 
@@ -161,10 +167,8 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 800,
-    .enc_ticks_per_rev = 2000, // max 3000 RPM, DIP switches 0100
 
     .motor_reduction = 9.1455,
-    .enc_reduction = 9.1455,
 
     .direction = 1,
 
@@ -174,8 +178,16 @@ Joint joints[] = {
 
     .step_pin = 8,
     .dir_pin = 9,
-    .enc_a_pin = 22,
-    .enc_b_pin = 23,
+
+    .encoder_config = {
+      .type = EncoderConfig::MAGNETIC,
+      .magnetic = {
+        .bus = &Wire1,
+        .counterclockwise = false,
+        .offset = 0,
+        .dir_pin = 255,
+      },
+    },
 
     .speed_filter_strength = 5.0,
 
@@ -193,10 +205,8 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 640, // max 6000 RPM, DIP switches 0011
 
     .motor_reduction = 19.0,
-    .enc_reduction = 19.0,
 
     .direction = 1,
 
@@ -206,8 +216,10 @@ Joint joints[] = {
 
     .step_pin = 10,
     .dir_pin = 11,
-    .enc_a_pin = 24,
-    .enc_b_pin = 25,
+
+    .encoder_config = {
+      .type = EncoderConfig::NONE,
+    },
 
     .speed_filter_strength = 5.0,
 

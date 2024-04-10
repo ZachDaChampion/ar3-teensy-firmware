@@ -9,10 +9,34 @@
 #ifndef AR3_TEENSY_FIRMWARE__JOINT_HPP
 #define AR3_TEENSY_FIRMWARE__JOINT_HPP
 
+#include <AS5600.h>
 #include <AccelStepper.h>
 #include <Encoder.h>
 #include <LimitSwitch.h>
 #include <stdint.h>
+
+#include <variant>
+
+struct EncoderConfig {
+  enum { NONE, OPTICAL, MAGNETIC } type;  /// The type of encoder used on this joint
+  union {
+    // Config for an opticla encoder
+    struct {
+      uint8_t pin_a;      // A pin of the encoder
+      uint8_t pin_b;      // B pin of the encoder
+      int ticks_per_rev;  // Number of ticks per revolution of the encoder
+      float reduction;    // Gear reduction from the encoder to the joint
+    } optical;
+
+    // Config for a magnetic encoder
+    struct {
+      TwoWire* bus;           // The I2C bus (Wire, Wire1, Wire2) that the encoder is on
+      bool counterclockwise;  // True if positive should be counterclockwise
+      int offset;             // Offset to add to the encoder's value
+      uint8_t dir_pin;        // Pin that determines the encoder's direction, or 255 for none
+    } magnetic;
+  };
+};
 
 struct JointConfig {
   uint8_t id;        // ID of the joint (0-5)
@@ -26,10 +50,7 @@ struct JointConfig {
                                  // This is included in the joint's calibration procedure.
 
   int motor_steps_per_rev;  // Number of steps per revolution of the stepper motor
-  int enc_ticks_per_rev;    // Number of ticks per revolution of the encoder
-
-  float motor_reduction;  // Gear reduction from the motor to the joint
-  float enc_reduction;    // Gear reduction from the encoder to the joint
+  float motor_reduction;    // Gear reduction from the motor to the joint
 
   int8_t direction;  // 1 if the joint is not reversed, -1 if it is reversed
 
@@ -43,8 +64,7 @@ struct JointConfig {
   uint8_t step_pin;  // Step pin of the motor controller
   uint8_t dir_pin;   // Direction pin of the motor controller
 
-  uint8_t enc_a_pin;  // Encoder A pin
-  uint8_t enc_b_pin;  // Encoder B pin
+  EncoderConfig encoder_config;  // Configuration for the encoder
 
   float speed_filter_strength;  // Strength of the speed filter (percent of new speed per second)
 
@@ -232,8 +252,9 @@ public:
 
 private:
   AccelStepper stepper;
-  Encoder encoder;
   LimitSwitch<8> limit_switch;
+
+  std::variant<Encoder, AS5600, bool> encoder;
 
   float enc_deg_per_tick;
   float motor_deg_per_step;
