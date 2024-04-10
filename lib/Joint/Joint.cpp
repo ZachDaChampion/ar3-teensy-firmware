@@ -51,6 +51,7 @@ void Joint::init()
       std::get<AS5600>(encoder).setDirection(magnetic_config.counterclockwise);
       std::get<AS5600>(encoder).setOffset(magnetic_config.offset);
       std::get<AS5600>(encoder).begin(magnetic_config.dir_pin);
+      is_calibrated = true;
     } break;
 
     default:
@@ -164,6 +165,7 @@ void Joint::stop(bool smooth)
 
 void Joint::calibrate()
 {
+  if (config.encoder_config.type == EncoderConfig::MAGNETIC) return;
   state.id = State::CALIBRATING;
   state.data.calibrate.has_hit_limit_switch = false;
   stepper.setSpeed(config.calibration_speed / motor_deg_per_step);

@@ -62,7 +62,7 @@ struct CobotState {
 #define FW_VERSION 8
 
 // The order in which joints are calibrated.
-static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
+static const uint8_t CALIBRATION_ORDER[] = { 5, 3, 1, 0 };
 
 //                                                                                                //
 // ======================================== Global data ========================================= //
