@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <AccelStepper.h>
 #include <LimitSwitch.h>
+#include <AS5600.h>
 
 #include <functional>
 #include <array>
@@ -17,6 +18,8 @@ using namespace std;
 
 int selected_joint = -1;
 
+AS5600 encoders[2];
+
 //                                                                                                //
 // ===================================== Command functions ====================================== //
 //                                                                                                //
@@ -31,13 +34,19 @@ void print_status()
   auto& joint = joints[selected_joint];
   auto& config = joint.get_config();
 
+  uint16_t enc_vals[2];
+  for (size_t i = 0; i < 2; ++i) enc_vals[i] = encoders[i].rawAngle();
+
+  Serial.printf("Encoders:\n");
+  Serial.printf("  Wire:  %d (%f)\n", enc_vals[0], enc_vals[0] * AS5600_RAW_TO_DEGREES);
+  Serial.printf("  Wire1: %d (%f)\n", enc_vals[1], enc_vals[1] * AS5600_RAW_TO_DEGREES);
   Serial.printf("Selected joint: %d (%s)\n", selected_joint, config.name);
   Serial.printf("  Steps: %ld\n", joint.get_steps());
   Serial.printf("  Limit switch: %s\n", joint.limit_switch_pressed() ? "pressed" : "not pressed");
   Serial.printf("  Config:\n");
   Serial.printf("    Step pin: %d\n", config.step_pin);
-  Serial.printf("    Dir pin: %d\n", config.dir_pin);
-  Serial.printf("    Lim pin: %d\n", config.lim_pin);
+  Serial.printf("    Dir pin:  %d\n", config.dir_pin);
+  Serial.printf("    Lim pin:  %d\n", config.lim_pin);
   Serial.printf("    Steps per revolution: %d\n", config.motor_steps_per_rev);
   Serial.printf("    Motor reduction: %f\n", config.motor_reduction);
   Serial.printf("    Max speed: %f deg/sec\n", config.max_speed);
@@ -145,6 +154,11 @@ void setup()
   for (auto& joint : joints) {
     joint.init();
   }
+
+  encoders[0] = AS5600(&Wire);
+  encoders[1] = AS5600(&Wire1);
+  encoders[0].begin();
+  encoders[1].begin();
 }
 
 void loop()
