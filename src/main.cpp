@@ -34,12 +34,20 @@ void print_status()
   auto& joint = joints[selected_joint];
   auto& config = joint.get_config();
 
-  uint16_t enc_vals[2];
-  for (size_t i = 0; i < 2; ++i) enc_vals[i] = encoders[i].rawAngle();
+  for (size_t i = 0; i < 2; ++i) {
+    AS5600* e = &encoders[i];
+    Serial.printf("Encoder %d:\n", i);
+    uint16_t angle = e->readAngle();
+    uint16_t raw = e->rawAngle();
+    Serial.printf("  Angle: %d (%f deg)\n", angle, angle * AS5600_RAW_TO_DEGREES);
+    Serial.printf("  Raw Angle: %d (%f deg)\n", raw, raw * AS5600_RAW_TO_DEGREES);
+    Serial.printf("  Magnet Found: %d\n", e->detectMagnet());
+    Serial.printf("  Magnitude: %d\n", e->readMagnitude());
+    Serial.printf("  Status: %d\n", e->readStatus());
+    Serial.printf("  Too Weak: %d\n", e->magnetTooWeak());
+    Serial.printf("  To Strong: %d\n", e->magnetTooStrong());
+  }
 
-  Serial.printf("Encoders:\n");
-  Serial.printf("  Wire:  %d (%f)\n", enc_vals[0], enc_vals[0] * AS5600_RAW_TO_DEGREES);
-  Serial.printf("  Wire1: %d (%f)\n", enc_vals[1], enc_vals[1] * AS5600_RAW_TO_DEGREES);
   Serial.printf("Selected joint: %d (%s)\n", selected_joint, config.name);
   Serial.printf("  Steps: %ld\n", joint.get_steps());
   Serial.printf("  Limit switch: %s\n", joint.limit_switch_pressed() ? "pressed" : "not pressed");
@@ -155,10 +163,15 @@ void setup()
     joint.init();
   }
 
+  Wire.begin();
+  Wire1.begin();
   encoders[0] = AS5600(&Wire);
   encoders[1] = AS5600(&Wire1);
   encoders[0].begin();
   encoders[1].begin();
+
+  // delay(5000);
+  // Serial.printf("%d, %d\n", encoders[0].isConnected(), encoders[1].isConnected());
 }
 
 void loop()
