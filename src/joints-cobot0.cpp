@@ -110,7 +110,7 @@ Joint joints[] = {
       .magnetic = {
         .bus = &Wire,
         .direction = 1,
-        .offset = -339.785,
+        .offset = -165.666,
         .dir_pin = 255,
       },
     },
@@ -176,7 +176,7 @@ Joint joints[] = {
       .magnetic = {
         .bus = &Wire1,
         .direction = -1,
-        .offset = -108.018,
+        .offset = -107.666,
         .dir_pin = 255,
       },
     },

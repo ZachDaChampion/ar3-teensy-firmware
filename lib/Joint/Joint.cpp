@@ -284,17 +284,22 @@ void Joint::update()
 void Joint::update_measured_position()
 {
   if (!encoder_feedback_enabled) return;
+  if (micros_timer < 1000) return;
+  micros_timer = 0;
 
   float measured_deg;
   switch (config.encoder_config.type) {
-    case EncoderConfig::OPTICAL:
+    case EncoderConfig::OPTICAL: {
       measured_deg = std::get<Encoder>(encoder).read() * config.direction * enc_deg_per_tick;
+    } break;
     case EncoderConfig::MAGNETIC: {
-      measured_deg = std::get<AS5600>(encoder).rawAngle() * enc_deg_per_tick *
-                     config.encoder_config.magnetic.direction;
+      auto& enc = std::get<AS5600>(encoder);
+      const uint16_t measured = enc.readAngle();
+      if (enc.lastError() != AS5600_OK) return;
+      measured_deg = measured * enc_deg_per_tick * config.encoder_config.magnetic.direction;
       while (measured_deg > 180.f) measured_deg -= 360.f;
       while (measured_deg < -180.f) measured_deg += 360.f;
-    };
+    } break;
     default:
       return;
   }
