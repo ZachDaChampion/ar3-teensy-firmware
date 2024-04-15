@@ -105,14 +105,18 @@ Joint joints[] = {
     .step_pin = 4,
     .dir_pin = 5,
 
+    // .encoder_config = {
+    //   .type = EncoderConfig::MAGNETIC,
+    //   .magnetic = {
+    //     .bus = &Wire,
+    //     .direction = -1,
+    //     .offset = -165.666,
+    //     .dir_pin = 255,
+    //   },
+    // },
+
     .encoder_config = {
-      .type = EncoderConfig::MAGNETIC,
-      .magnetic = {
-        .bus = &Wire,
-        .direction = 1,
-        .offset = -165.666,
-        .dir_pin = 255,
-      },
+      .type = EncoderConfig::NONE,
     },
 
     .lim_pin = 28,

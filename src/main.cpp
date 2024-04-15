@@ -98,7 +98,7 @@ void update_joint_measurements()
     const float before = joints[i].get_position();
     joints[i].update_measured_position();
     const float after = joints[i].get_position();
-    if (abs(before - after) > 1)
+    if (abs(before - after) > 0.1)
       messenger.log(LogLevel::DEBUG, "Joint %d updated from %0.2f to %0.2f", i, before, after);
   }
 }
@@ -907,8 +907,20 @@ void loop()
   switch (state.id) {
     // In the IDLE and FOLLOW_TRAJECTORY states, do nothing.
     case CobotState::IDLE:
-    case CobotState::FOLLOW_TRAJECTORY:
       break;
+
+    // In the FOLLOW_TRAJECTORY state, update joint measurements iff all joints
+    // are stopped.
+    case CobotState::FOLLOW_TRAJECTORY: {
+      // bool all_stopped = true;
+      // for (auto& joint : joints) {
+      //   if (joint.get_state()->id != Joint::State::IDLE) {
+      //     all_stopped = false;
+      //     break;
+      //   }
+      // }
+      // if (all_stopped) update_joint_measurements();
+    } break;
 
     // In the CALIBRATING state, check if a joint is still calibrating. If not, start calibrating
     // the next joint. If all joints are calibrated, send a done response and transition to the IDLE
@@ -933,7 +945,6 @@ void loop()
       // If all joints are stopped but there are still joints left to calibrate, start calibrating
       // the next joint in the calibration order.
       else if (all_stopped) {
-        update_joint_measurements();
         for (auto index : CALIBRATION_ORDER) {
           if (state.calibrating.joint_bitfield & (1 << index)) {
             messenger.log(LogLevel::DEBUG, "Calibrating joint %d", index);

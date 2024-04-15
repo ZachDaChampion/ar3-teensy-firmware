@@ -141,7 +141,10 @@ void Joint::stop(bool smooth)
 
 void Joint::calibrate()
 {
-  if (config.encoder_config.type == EncoderConfig::MAGNETIC) return;
+  if (config.encoder_config.type == EncoderConfig::MAGNETIC) {
+    update_measured_position();
+    return;
+  }
   state.id = State::CALIBRATING;
   state.data.calibrate.has_hit_limit_switch = false;
   stepper.setSpeed(config.calibration_speed / motor_deg_per_step);
@@ -284,7 +287,7 @@ void Joint::update()
 void Joint::update_measured_position()
 {
   if (!encoder_feedback_enabled) return;
-  if (micros_timer < 1000) return;
+  if (micros_timer < 1e6) return;
   micros_timer = 0;
 
   float measured_deg;
@@ -294,8 +297,27 @@ void Joint::update_measured_position()
     } break;
     case EncoderConfig::MAGNETIC: {
       auto& enc = std::get<AS5600>(encoder);
-      const uint16_t measured = enc.readAngle();
-      if (enc.lastError() != AS5600_OK) return;
+
+      // Wait until we measure the same value 5 times in a row.
+      uint16_t measured = 0;
+      size_t good = 0;
+      size_t iterations = 0;
+      while (good < 3) {
+        if (iterations > 10) return;
+        ++iterations;
+
+        const uint16_t measured_new = enc.readAngle();
+        if (enc.lastError() != AS5600_OK) continue;
+
+        if (measured_new == measured) {
+          ++good;
+        } else {
+          good = 0;
+          measured = measured_new;
+        }
+        delay(1);
+      }
+
       measured_deg = measured * enc_deg_per_tick * config.encoder_config.magnetic.direction;
       while (measured_deg > 180.f) measured_deg -= 360.f;
       while (measured_deg < -180.f) measured_deg += 360.f;
