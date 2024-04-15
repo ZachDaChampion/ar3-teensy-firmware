@@ -176,6 +176,20 @@ void setup()
 
 void loop()
 {
+#if false
+  while (!Serial.available()) {
+    for (size_t i = 0; i < 2; ++i) {
+      uint16_t val = encoders[i].rawAngle();
+      int e1 = encoders[i].lastError();
+      uint8_t status = encoders[i].readStatus();
+      int e2 = encoders[i].lastError();
+      Serial.printf("J%d: %d (%d)\t%08x (%d)\t\t", i, val, e1, status, e2);
+    }
+    Serial.println();
+    delay(1);
+  }
+#endif
+
   Serial.print("\n: ");
   String input = Serial.readStringUntil('\n');
 
