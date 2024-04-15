@@ -62,7 +62,7 @@ struct CobotState {
 #define FW_VERSION 8
 
 // The order in which joints are calibrated.
-static const uint8_t CALIBRATION_ORDER[] = { 5, 3, 1, 0 };
+static const uint8_t CALIBRATION_ORDER[] = { 5, 4, 3, 1, 2, 0 };
 
 //                                                                                                //
 // ======================================== Global data ========================================= //
@@ -83,7 +83,25 @@ static size_t serial_buffer_in_len = 0;
 static const size_t ERROR_MSG_BUFFER_SIZE = 512;
 
 // The messenger.
-Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::INFO);
+Messenger<SERIAL_BUFFER_SIZE, ERROR_MSG_BUFFER_SIZE> messenger(serial_buffer_out, LogLevel::DEBUG);
+
+//                                                                                                //
+// ========================================== Utility =========================================== //
+//                                                                                                //
+
+/**
+ * Update the measured positions of all joints.
+ */
+void update_joint_measurements()
+{
+  for (size_t i = 0; i < JOINT_COUNT; ++i) {
+    const float before = joints[i].get_position();
+    joints[i].update_measured_position();
+    const float after = joints[i].get_position();
+    if (abs(before - after) > 1)
+      messenger.log(LogLevel::DEBUG, "Joint %d updated from %0.2f to %0.2f", i, before, after);
+  }
+}
 
 //                                                                                                //
 // ====================================== Request handlers ====================================== //
@@ -722,7 +740,10 @@ void handle_go_home(uint32_t request_id, const uint8_t* data, uint8_t data_len)
   // Move the specified joints to their home positions.
   for (size_t i = 0; i < JOINT_COUNT; ++i) {
     if (joints_bf & (1 << i)) {
+      messenger.log(LogLevel::DEBUG, "Moving Joint %d from %f to home", i,
+                    joints[i].get_position());
       joints[i].move_to_auto(0);
+      messenger.log(LogLevel::DEBUG, "Corrected to %f", joints[i].get_position());
     }
   }
 
@@ -912,8 +933,10 @@ void loop()
       // If all joints are stopped but there are still joints left to calibrate, start calibrating
       // the next joint in the calibration order.
       else if (all_stopped) {
+        update_joint_measurements();
         for (auto index : CALIBRATION_ORDER) {
           if (state.calibrating.joint_bitfield & (1 << index)) {
+            messenger.log(LogLevel::DEBUG, "Calibrating joint %d", index);
             joints[index].calibrate();
             state.calibrating.joint_bitfield &= ~(1 << index);
             break;
@@ -942,6 +965,9 @@ void loop()
       break;
     }
   }
+
+  // If the cobot is idle, update the measured position of all joints.
+  if (state.id == CobotState::IDLE) update_joint_measurements();
 
   // Read from the serial port until the buffer is full or there are no more bytes to read.
   if (!Serial.available()) return;

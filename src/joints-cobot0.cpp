@@ -49,8 +49,6 @@ Joint joints[] = {
       .type = EncoderConfig::NONE,
     },
 
-    .speed_filter_strength = 5.0,
-
     .lim_pin = 26,
   }),
   
@@ -80,8 +78,6 @@ Joint joints[] = {
     .encoder_config = {
       .type = EncoderConfig::NONE,
     },
-
-    .speed_filter_strength = 5.0,
 
     .lim_pin = 27,
   }),
@@ -113,13 +109,11 @@ Joint joints[] = {
       .type = EncoderConfig::MAGNETIC,
       .magnetic = {
         .bus = &Wire,
-        .counterclockwise = false,
-        .offset = 0,
+        .direction = 1,
+        .offset = -339.785,
         .dir_pin = 255,
       },
     },
-
-    .speed_filter_strength = 5.0,
 
     .lim_pin = 28,
   }),
@@ -151,8 +145,6 @@ Joint joints[] = {
       .type = EncoderConfig::NONE,
     },
 
-    .speed_filter_strength = 5.0,
-
     .lim_pin = 29,
   }),
   
@@ -183,13 +175,11 @@ Joint joints[] = {
       .type = EncoderConfig::MAGNETIC,
       .magnetic = {
         .bus = &Wire1,
-        .counterclockwise = false,
-        .offset = 0,
+        .direction = -1,
+        .offset = -108.018,
         .dir_pin = 255,
       },
     },
-
-    .speed_filter_strength = 5.0,
 
     .lim_pin = 30,
   }),
@@ -220,8 +210,6 @@ Joint joints[] = {
     .encoder_config = {
       .type = EncoderConfig::NONE,
     },
-
-    .speed_filter_strength = 5.0,
 
     .lim_pin = 31,
   })

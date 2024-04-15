@@ -27,6 +27,7 @@ Joint::Joint(JointConfig config)
 
     case EncoderConfig::MAGNETIC: {
       const auto magnetic_config = config.encoder_config.magnetic;
+      this->encoder_feedback_enabled = true;
       this->enc_deg_per_tick = 360.0 / 4096.0;
       this->enc_ticks_per_step = 4096.f / (float)config.motor_steps_per_rev;
       this->encoder = AS5600(magnetic_config.bus);
@@ -48,7 +49,7 @@ void Joint::init()
   switch (config.encoder_config.type) {
     case EncoderConfig::MAGNETIC: {
       const auto magnetic_config = config.encoder_config.magnetic;
-      std::get<AS5600>(encoder).setDirection(magnetic_config.counterclockwise);
+      magnetic_config.bus->begin();
       std::get<AS5600>(encoder).setOffset(magnetic_config.offset);
       std::get<AS5600>(encoder).begin(magnetic_config.dir_pin);
       is_calibrated = true;
@@ -66,37 +67,16 @@ Joint::State* Joint::get_state()
 
 float Joint::get_position()
 {
-  if (encoder_feedback_enabled) {
-    switch (config.encoder_config.type) {
-      case EncoderConfig::OPTICAL:
-        return std::get<Encoder>(encoder).read() * config.direction * enc_deg_per_tick;
-      case EncoderConfig::MAGNETIC: {
-        float enc = std::get<AS5600>(encoder).rawAngle() * enc_deg_per_tick;
-        const float stp = stepper.currentPosition() * config.direction * motor_deg_per_step;
-        while (enc - stp > 180.f) enc -= 360.f;
-        while (enc - stp < -180.f) enc += 360.f;
-        return enc;
-      };
-      default:
-        break;
-    }
-  }
-
   return stepper.currentPosition() * config.direction * motor_deg_per_step;
 }
 
 float Joint::get_speed()
 {
-  if (config.encoder_config.type == EncoderConfig::NONE)
-    return stepper.speed() * motor_deg_per_step;
-  else
-    return measured_speed;
+  return stepper.speed() * motor_deg_per_step;
 }
 
 void Joint::move_to_auto(int32_t target)
 {
-  if (encoder_feedback_enabled) fix_stepper_position();
-
   float target_f = target * 0.001f;
   state.id = State::MOVE_TO_AUTO;
   state.data.move_to_auto.target_steps = config.direction * target_f / motor_deg_per_step;
@@ -112,8 +92,6 @@ void Joint::move_to_auto(int32_t target)
 
 void Joint::move_to_speed(int32_t target, int32_t speed)
 {
-  if (encoder_feedback_enabled) fix_stepper_position();
-
   float target_f = target * 0.001f;
   float speed_f = speed * 0.001f;
   state.id = State::MOVE_TO_SPEED;
@@ -137,8 +115,6 @@ void Joint::move_to_speed(int32_t target, int32_t speed)
 
 void Joint::move_forever_speed(int32_t speed)
 {
-  if (encoder_feedback_enabled) fix_stepper_position();
-
   float speed_f = speed * 0.001f;
   state.id = State::MOVE_FOREVER_SPEED;
   state.data.move_forever_speed.speed = config.direction * speed_f / motor_deg_per_step;
@@ -228,7 +204,6 @@ void Joint::reset()
   stepper.runSpeed();
   stepper.setCurrentPosition(0);
   last_encoder_pos = 0;
-  measured_speed = 0;
   micros_timer = 0;
 
   switch (config.encoder_config.type) {
@@ -237,6 +212,7 @@ void Joint::reset()
     } break;
     case EncoderConfig::MAGNETIC: {
       std::get<AS5600>(encoder).setOffset(config.encoder_config.magnetic.offset);
+      encoder_feedback_enabled = true;
     } break;
     default:
       break;
@@ -251,7 +227,6 @@ void Joint::update()
 
     case State::STOPPING:
       if (stepper.speed() == 0) {
-        if (encoder_feedback_enabled) fix_stepper_position();
         state.id = State::IDLE;
         break;
       }
@@ -261,7 +236,6 @@ void Joint::update()
     case State::CALIBRATING: {
       if (state.data.calibrate.has_hit_limit_switch) {
         if (!stepper.isRunning()) {
-          if (encoder_feedback_enabled) fix_stepper_position();
           state.id = State::IDLE;
           is_calibrated = true;
           break;
@@ -282,7 +256,6 @@ void Joint::update()
 
     case State::MOVE_TO_AUTO:
       if (!stepper.isRunning()) {
-        if (encoder_feedback_enabled) fix_stepper_position();
         state.id = State::IDLE;
         break;
       }
@@ -306,68 +279,27 @@ void Joint::update()
       stepper.runSpeed();
       break;
   }
-
-  /*
-   * Calculate the speed of the joint. This uses a moving mean filter, scaled by the time since the
-   * last update. This way, the filter is independent of the update rate.
-   */
-
-  if (encoder_feedback_enabled) {
-    float dt = micros_timer / 1000000.0f;
-    if (dt == 0) return;
-    micros_timer = 0;
-
-    int32_t encoder_pos;
-    switch (config.encoder_config.type) {
-      case EncoderConfig::OPTICAL:
-        encoder_pos = std::get<Encoder>(encoder).read() * config.direction;
-        break;
-      case EncoderConfig::MAGNETIC:
-        encoder_pos = std::get<AS5600>(encoder).rawAngle();
-        break;
-      default:
-        return;
-    }
-
-    int32_t diff = encoder_pos - last_encoder_pos;
-    static const int32_t half_rev = 180.f / enc_deg_per_tick;
-    static const int32_t full_rev = 360.f / enc_deg_per_tick;
-    while (diff > half_rev) diff -= full_rev;
-    while (diff < -half_rev) diff += full_rev;
-
-    const float unfiltered_speed = diff * enc_deg_per_tick / dt;
-    last_encoder_pos = encoder_pos;
-
-    const float scaled_filter_strength = config.speed_filter_strength * dt;
-    if (scaled_filter_strength >= 1) {
-      measured_speed = unfiltered_speed;
-    } else {
-      measured_speed =
-        measured_speed * (1 - scaled_filter_strength) + unfiltered_speed * scaled_filter_strength;
-    }
-  }
 }
 
-void Joint::fix_stepper_position()
+void Joint::update_measured_position()
 {
   if (!encoder_feedback_enabled) return;
-  int32_t encoder_pos;
+
+  float measured_deg;
   switch (config.encoder_config.type) {
     case EncoderConfig::OPTICAL:
-      encoder_pos = std::get<Encoder>(encoder).read();
-      break;
-    case EncoderConfig::MAGNETIC:
-      encoder_pos = std::get<AS5600>(encoder).rawAngle();
-      break;
+      measured_deg = std::get<Encoder>(encoder).read() * config.direction * enc_deg_per_tick;
+    case EncoderConfig::MAGNETIC: {
+      measured_deg = std::get<AS5600>(encoder).rawAngle() * enc_deg_per_tick *
+                     config.encoder_config.magnetic.direction;
+      while (measured_deg > 180.f) measured_deg -= 360.f;
+      while (measured_deg < -180.f) measured_deg += 360.f;
+    };
     default:
       return;
   }
-  int32_t stepper_pos = stepper.currentPosition();
-  float encoder_steps = encoder_pos / enc_ticks_per_step;
 
-  if (abs(stepper_pos - encoder_steps) > 1) {
-    stepper.setCurrentPosition((long)encoder_steps);
-  }
+  stepper.setCurrentPosition(measured_deg * config.direction / motor_deg_per_step);
 }
 
 void Joint::set_feedback_enabled(bool enabled)

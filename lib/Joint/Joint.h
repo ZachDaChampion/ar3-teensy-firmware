@@ -30,10 +30,10 @@ struct EncoderConfig {
 
     // Config for a magnetic encoder
     struct {
-      TwoWire* bus;           // The I2C bus (Wire, Wire1, Wire2) that the encoder is on
-      bool counterclockwise;  // True if positive should be counterclockwise
-      int offset;             // Offset to add to the encoder's value
-      uint8_t dir_pin;        // Pin that determines the encoder's direction, or 255 for none
+      TwoWire* bus;     // The I2C bus (Wire, Wire1, Wire2) that the encoder is on
+      int direction;    // -1 to invert direction
+      float offset;     // Offset to add to the encoder's value (degrees)
+      uint8_t dir_pin;  // Pin that determines the encoder's direction, or 255 for none
     } magnetic;
   };
 };
@@ -65,8 +65,6 @@ struct JointConfig {
   uint8_t dir_pin;   // Direction pin of the motor controller
 
   EncoderConfig encoder_config;  // Configuration for the encoder
-
-  float speed_filter_strength;  // Strength of the speed filter (percent of new speed per second)
 
   uint8_t lim_pin;  // Limit switch pin
 };
@@ -241,7 +239,7 @@ public:
   /**
    * Uses the encoder value to remove any error in the stepper position.
    */
-  void fix_stepper_position();
+  void update_measured_position();
 
   /**
    * Enable or disable encoder feedback.
@@ -263,7 +261,6 @@ private:
   State state;
   bool is_calibrated;
   bool encoder_feedback_enabled;
-  float measured_speed;
   int32_t last_encoder_pos;
   elapsedMicros micros_timer;
   elapsedMillis print_timer;
