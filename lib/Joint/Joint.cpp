@@ -131,7 +131,7 @@ bool Joint::get_is_calibrated()
 
 void Joint::override_position(int32_t position)
 {
-  float position_f = position * 0.001f;
+  float position_f = position * config.direction * 0.001f;
   state.id = State::IDLE;
   is_calibrated = true;
   stepper.setCurrentPosition(position_f / motor_deg_per_step);
@@ -140,7 +140,7 @@ void Joint::override_position(int32_t position)
 
 bool Joint::position_within_range(int32_t position)
 {
-  float position_f = position * 0.001f;
+  float position_f = position * config.direction * 0.001f;
   return (position_f >= config.min_steps * motor_deg_per_step) &&
          (position_f <= config.max_steps * motor_deg_per_step);
 }
@@ -153,8 +153,12 @@ bool Joint::speed_within_range(int32_t speed)
 
 String Joint::position_range_str() const
 {
-  return "[" + String(config.min_steps * motor_deg_per_step) + ", " +
-         String(config.max_steps * motor_deg_per_step) + "]";
+  if (config.direction == 1)
+    return "[" + String(config.min_steps * motor_deg_per_step) + ", " +
+           String(config.max_steps * motor_deg_per_step) + "]";
+  else
+    return "[" + String(-config.max_steps * motor_deg_per_step) + ", " +
+           String(-config.min_steps * motor_deg_per_step) + "]";
 }
 
 String Joint::speed_range_str() const

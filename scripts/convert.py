@@ -4,9 +4,9 @@ raw = [
     """.id = 0,
     .name = "base",
 
-    .min_steps = -7425,
-    .max_steps = 6250,
-    .ref_steps = -7425,
+    .min_steps = -8000,
+    .max_steps = 6000,
+    .ref_steps = -8000,
     
     .goto_after_calibrate = 0,
 
@@ -33,11 +33,11 @@ raw = [
     """.id = 1,
     .name = "shoulder",
 
-    .min_steps = -2350,
-    .max_steps = 4000,
-    .ref_steps = -2450,
+    .min_steps = -5000,
+    .max_steps = 2400,
+    .ref_steps = 2400,
     
-    .goto_after_calibrate = -1750,
+    .goto_after_calibrate = 1750,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
@@ -45,11 +45,11 @@ raw = [
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
 
-    .direction = 1,
+    .direction = -1,
 
     .max_speed = 60.0,
     .max_accel = 240.0,
-    .calibration_speed = -5.0,
+    .calibration_speed = 5.0,
 
     .step_pin = 2,
     .dir_pin = 3,
@@ -62,11 +62,11 @@ raw = [
     """.id = 2,
     .name = "elbow",
 
-    .min_steps = -8000,
-    .max_steps = 8100,
-    .ref_steps = 8100,
+    .min_steps = -8200,
+    .max_steps = 5000,
+    .ref_steps = -8200,
     
-    .goto_after_calibrate = 3500,
+    .goto_after_calibrate = -3500,
 
     .motor_steps_per_rev = 400,
     .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
@@ -74,11 +74,11 @@ raw = [
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
 
-    .direction = 1,
+    .direction = -1,
 
     .max_speed = 160.0,
     .max_accel = 220.0,
-    .calibration_speed = 5.0,
+    .calibration_speed = -5.0,
 
     .step_pin = 4,
     .dir_pin = 5,
@@ -91,9 +91,9 @@ raw = [
     """.id = 3,
     .name = "forearm roll",
 
-    .min_steps = -4250,
-    .max_steps = 7046,
-    .ref_steps = 7046,
+    .min_steps = -7400,
+    .max_steps = 4500,
+    .ref_steps = -7400,
     
     .goto_after_calibrate = 0,
 
@@ -103,16 +103,16 @@ raw = [
     .motor_reduction = 39.2,
     .enc_reduction = 39.2,
 
-    .direction = -1,
+    .direction = 1,
 
     .max_speed = 240.0,
     .max_accel = 1200.0,
-    .calibration_speed = 10.0,
+    .calibration_speed = -10.0,
 
     .step_pin = 6,
     .dir_pin = 7,
-    .enc_a_pin = 20,
-    .enc_b_pin = 21,
+    .enc_a_pin = 33,
+    .enc_b_pin = 34,
 
     .speed_filter_strength = 5.0,
 
@@ -120,9 +120,9 @@ raw = [
     """.id = 4,
     .name = "wrist pitch",
 
-    .min_steps = -1750,
-    .max_steps = 2250,
-    .ref_steps = -1750,
+    .min_steps = -2100,
+    .max_steps = 2100,
+    .ref_steps = -2100,
     
     .goto_after_calibrate = 0,
 
@@ -140,8 +140,8 @@ raw = [
 
     .step_pin = 8,
     .dir_pin = 9,
-    .enc_a_pin = 22,
-    .enc_b_pin = 23,
+    .enc_a_pin = 35,
+    .enc_b_pin = 36,
 
     .speed_filter_strength = 5.0,
 
@@ -149,9 +149,9 @@ raw = [
     """.id = 5,
     .name = "wrist roll",
 
-    .min_steps = -3000,
-    .max_steps = 3250,
-    .ref_steps = 3250,
+    .min_steps = -3285,
+    .max_steps = 3700,
+    .ref_steps = -3285,
     
     .goto_after_calibrate = 0,
 
@@ -161,16 +161,16 @@ raw = [
     .motor_reduction = 19.0,
     .enc_reduction = 19.0,
 
-    .direction = 1,
+    .direction = -1,
 
     .max_speed = 1500.0,
     .max_accel = 8000.0,
-    .calibration_speed = 10.0,
+    .calibration_speed = -10.0,
 
     .step_pin = 10,
     .dir_pin = 11,
-    .enc_a_pin = 24,
-    .enc_b_pin = 25,
+    .enc_a_pin = 37,
+    .enc_b_pin = 38,
 
     .speed_filter_strength = 5.0,
 
