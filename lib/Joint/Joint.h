@@ -242,9 +242,7 @@ private:
   State state;
   bool is_calibrated;
   bool encoder_feedback_enabled;
-  float measured_speed;
   int32_t last_encoder_pos;
-  elapsedMicros micros_timer;
   elapsedMillis print_timer;
 };
 

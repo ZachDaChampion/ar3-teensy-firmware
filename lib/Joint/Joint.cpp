@@ -8,8 +8,7 @@ Joint::Joint(JointConfig config)
 {
   this->state.id = State::IDLE;
   this->is_calibrated = false;
-  this->encoder_feedback_enabled = false;
-  this->micros_timer = 0;
+  this->encoder_feedback_enabled = true;
   this->print_timer = 0;
 
   this->enc_deg_per_tick = 360.0 / ((float)config.enc_ticks_per_rev * config.enc_reduction);
@@ -41,10 +40,7 @@ float Joint::get_position()
 
 float Joint::get_speed()
 {
-  if (encoder_feedback_enabled)
-    return measured_speed;
-  else
-    return stepper.speed() * motor_deg_per_step;
+  return stepper.speed() * motor_deg_per_step;
 }
 
 void Joint::move_to_auto(int32_t target)
@@ -170,14 +166,12 @@ void Joint::reset()
 {
   state.id = State::IDLE;
   is_calibrated = false;
-  encoder_feedback_enabled = false;
+  encoder_feedback_enabled = true;
   stepper.setSpeed(0);
   stepper.runSpeed();
   stepper.setCurrentPosition(0);
   encoder.write(0);
   last_encoder_pos = 0;
-  measured_speed = 0;
-  micros_timer = 0;
 }
 
 void Joint::update()
@@ -241,29 +235,6 @@ void Joint::update()
       }
       stepper.runSpeed();
       break;
-  }
-
-  /*
-   * Calculate the speed of the joint. This uses a moving mean filter, scaled by the time since the
-   * last update. This way, the filter is independent of the update rate.
-   */
-
-  if (encoder_feedback_enabled) {
-    float dt = micros_timer / 1000000.0f;
-    if (dt == 0) return;
-    micros_timer = 0;
-
-    const int32_t encoder_pos = encoder.read() * config.direction;
-    const float unfiltered_speed = (encoder_pos - last_encoder_pos) * enc_deg_per_tick / dt;
-    last_encoder_pos = encoder_pos;
-
-    const float scaled_filter_strength = config.speed_filter_strength * dt;
-    if (scaled_filter_strength >= 1) {
-      measured_speed = unfiltered_speed;
-    } else {
-      measured_speed =
-        measured_speed * (1 - scaled_filter_strength) + unfiltered_speed * scaled_filter_strength;
-    }
   }
 }
 

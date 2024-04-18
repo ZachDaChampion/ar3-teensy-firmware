@@ -33,7 +33,7 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
+    .enc_ticks_per_rev = 2048,
 
     .motor_reduction = 40.0,
     .enc_reduction = 40.0,
@@ -65,7 +65,7 @@ Joint joints[] = {
     .goto_after_calibrate = 1750,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
+    .enc_ticks_per_rev = 2048,
 
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
@@ -78,8 +78,8 @@ Joint joints[] = {
 
     .step_pin = 2,
     .dir_pin = 3,
-    .enc_a_pin = 16,
-    .enc_b_pin = 17,
+    .enc_a_pin = 17,
+    .enc_b_pin = 16,
 
     .speed_filter_strength = 5.0,
 
@@ -97,7 +97,7 @@ Joint joints[] = {
     .goto_after_calibrate = -3500,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 3840, // max 3000 RPM, DIP switches 1100
+    .enc_ticks_per_rev = 2048,
 
     .motor_reduction = 50.0,
     .enc_reduction = 50.0,
@@ -110,8 +110,8 @@ Joint joints[] = {
 
     .step_pin = 4,
     .dir_pin = 5,
-    .enc_a_pin = 18,
-    .enc_b_pin = 19,
+    .enc_a_pin = 19,
+    .enc_b_pin = 18,
 
     .speed_filter_strength = 5.0,
 
@@ -129,7 +129,7 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 960, // max 3000 RPM, DIP switches 1100
+    .enc_ticks_per_rev = 2048,
 
     .motor_reduction = 39.2,
     .enc_reduction = 39.2,
@@ -161,7 +161,7 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 800,
-    .enc_ticks_per_rev = 2000, // max 3000 RPM, DIP switches 0100
+    .enc_ticks_per_rev = 2048,
 
     .motor_reduction = 9.1455,
     .enc_reduction = 9.1455,
@@ -193,7 +193,7 @@ Joint joints[] = {
     .goto_after_calibrate = 0,
 
     .motor_steps_per_rev = 400,
-    .enc_ticks_per_rev = 640, // max 6000 RPM, DIP switches 0011
+    .enc_ticks_per_rev = 2048,
 
     .motor_reduction = 19.0,
     .enc_reduction = 19.0,
@@ -206,8 +206,8 @@ Joint joints[] = {
 
     .step_pin = 10,
     .dir_pin = 11,
-    .enc_a_pin = 37,
-    .enc_b_pin = 38,
+    .enc_a_pin = 38,
+    .enc_b_pin = 37,
 
     .speed_filter_strength = 5.0,
 
