@@ -43,7 +43,7 @@ static Joint joints[] = {
 
     .max_speed = 60.0,
     .max_accel = 240.0,
-    .calibration_speed = -5.0,
+    .calibration_speed = 5.0,
 
     .step_pin = 2,
     .dir_pin = 3,
@@ -61,7 +61,7 @@ static Joint joints[] = {
 
     .max_speed = 160.0,
     .max_accel = 220.0,
-    .calibration_speed = 5.0,
+    .calibration_speed = -5.0,
 
     .step_pin = 4,
     .dir_pin = 5,
@@ -79,7 +79,7 @@ static Joint joints[] = {
 
     .max_speed = 240.0,
     .max_accel = 1200.0,
-    .calibration_speed = 10.0,
+    .calibration_speed = -10.0,
 
     .step_pin = 6,
     .dir_pin = 7,
@@ -115,7 +115,7 @@ static Joint joints[] = {
 
     .max_speed = 1500.0,
     .max_accel = 8000.0,
-    .calibration_speed = 10.0,
+    .calibration_speed = -10.0,
 
     .step_pin = 10,
     .dir_pin = 11,

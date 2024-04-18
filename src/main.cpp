@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <AccelStepper.h>
 #include <LimitSwitch.h>
-#include <AS5600.h>
 
 #include <functional>
 #include <array>
@@ -18,8 +17,6 @@ using namespace std;
 
 int selected_joint = -1;
 
-AS5600 encoders[2];
-
 //                                                                                                //
 // ===================================== Command functions ====================================== //
 //                                                                                                //
@@ -33,21 +30,6 @@ void print_status()
 
   auto& joint = joints[selected_joint];
   auto& config = joint.get_config();
-
-  for (size_t i = 0; i < 2; ++i) {
-    AS5600* e = &encoders[i];
-    Serial.printf("Encoder %d:\n", i);
-    uint16_t angle = e->readAngle();
-    uint16_t raw = e->rawAngle();
-    Serial.printf("  Angle: %d (%f deg)\n", angle, angle * AS5600_RAW_TO_DEGREES);
-    Serial.printf("  Raw Angle: %d (%f deg)\n", raw, raw * AS5600_RAW_TO_DEGREES);
-    Serial.printf("  Magnet Found: %d\n", e->detectMagnet());
-    Serial.printf("  Magnitude: %d\n", e->readMagnitude());
-    Serial.printf("  Status: %d\n", e->readStatus());
-    Serial.printf("  Too Weak: %d\n", e->magnetTooWeak());
-    Serial.printf("  To Strong: %d\n", e->magnetTooStrong());
-  }
-
   Serial.printf("Selected joint: %d (%s)\n", selected_joint, config.name);
   Serial.printf("  Steps: %ld\n", joint.get_steps());
   Serial.printf("  Limit switch: %s\n", joint.limit_switch_pressed() ? "pressed" : "not pressed");
@@ -162,34 +144,10 @@ void setup()
   for (auto& joint : joints) {
     joint.init();
   }
-
-  Wire.begin();
-  Wire1.begin();
-  encoders[0] = AS5600(&Wire);
-  encoders[1] = AS5600(&Wire1);
-  encoders[0].begin();
-  encoders[1].begin();
-
-  // delay(5000);
-  // Serial.printf("%d, %d\n", encoders[0].isConnected(), encoders[1].isConnected());
 }
 
 void loop()
 {
-#if false
-  while (!Serial.available()) {
-    for (size_t i = 0; i < 2; ++i) {
-      uint16_t val = encoders[i].rawAngle();
-      int e1 = encoders[i].lastError();
-      uint8_t status = encoders[i].readStatus();
-      int e2 = encoders[i].lastError();
-      Serial.printf("J%d: %d (%d)\t%08x (%d)\t\t", i, val, e1, status, e2);
-    }
-    Serial.println();
-    delay(1);
-  }
-#endif
-
   Serial.print("\n: ");
   String input = Serial.readStringUntil('\n');
 
