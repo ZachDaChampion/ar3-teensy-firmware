@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <AccelStepper.h>
 #include <LimitSwitch.h>
+#include <Encoder.h>
 
 #include <functional>
 #include <array>
@@ -17,6 +18,15 @@ using namespace std;
 
 int selected_joint = -1;
 
+Encoder encoders[] = {
+  Encoder(14, 15),
+  Encoder(16, 17),
+  Encoder(18, 19),
+  Encoder(33, 34),
+  Encoder(35, 36),
+  Encoder(37, 38),
+};
+
 //                                                                                                //
 // ===================================== Command functions ====================================== //
 //                                                                                                //
@@ -32,6 +42,7 @@ void print_status()
   auto& config = joint.get_config();
   Serial.printf("Selected joint: %d (%s)\n", selected_joint, config.name);
   Serial.printf("  Steps: %ld\n", joint.get_steps());
+  Serial.printf("  Encoder: %d\n", encoders[selected_joint].read());
   Serial.printf("  Limit switch: %s\n", joint.limit_switch_pressed() ? "pressed" : "not pressed");
   Serial.printf("  Config:\n");
   Serial.printf("    Step pin: %d\n", config.step_pin);

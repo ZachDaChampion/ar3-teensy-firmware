@@ -12,7 +12,7 @@
 
 // clang-format off
 
-static const int GRIPPER_SERVO_PIN = 13;
+static const int GRIPPER_SERVO_PIN = 23;
 
 static Joint joints[] = {
   Joint({
